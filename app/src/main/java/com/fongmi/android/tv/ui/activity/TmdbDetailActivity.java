@@ -253,7 +253,8 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         binding.tmdbStatus.setVisibility(View.GONE);
         if (!TextUtils.isEmpty(getPicText())) {
             ImgUtil.load(getNameText(), getPicText(), binding.poster);
-            ImgUtil.load(getNameText(), getPicText(), binding.backdrop);
+            ImgUtil.load(getNameText(), getPicText(), binding.backdropFill);
+            ImgUtil.load(getNameText(), getPicText(), binding.backdrop, false);
         }
     }
 
@@ -288,7 +289,8 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         binding.episodeEmpty.setText(R.string.detail_source_episode_empty);
         if (!TextUtils.isEmpty(getPicText())) {
             ImgUtil.load(getNameText(), getPicText(), binding.poster);
-            ImgUtil.load(getNameText(), getPicText(), binding.backdrop);
+            ImgUtil.load(getNameText(), getPicText(), binding.backdropFill);
+            ImgUtil.load(getNameText(), getPicText(), binding.backdrop, false);
         }
         episodeAdapter = new TmdbEpisodeAdapter(episode -> {
             selectedEpisode = episode;
@@ -479,6 +481,9 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         lightTheme = resolveLightTheme();
         ThemeColors colors = lightTheme ? ThemeColors.light() : ThemeColors.dark();
         binding.root.setBackgroundColor(colors.background);
+        binding.hero.setBackgroundColor(colors.background);
+        binding.backdropFill.setAlpha(lightTheme ? 0.35f : 0.5f);
+        binding.backdrop.setAlpha(lightTheme ? 0.92f : 1f);
         binding.backdropShade.setBackgroundColor(colors.backdropShade);
         setCard(binding.contentPanel, colors.panel, colors.line);
         setPlayerCard(colors);
@@ -833,7 +838,10 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         }
         if (TextUtils.isEmpty(backdrop)) backdrop = vod.getPic();
         binding.hero.setVisibility(TextUtils.isEmpty(backdrop) ? View.GONE : View.VISIBLE);
-        if (!TextUtils.isEmpty(backdrop)) ImgUtil.load(vod.getName(), backdrop, binding.backdrop);
+        if (!TextUtils.isEmpty(backdrop)) {
+            ImgUtil.load(vod.getName(), backdrop, binding.backdropFill);
+            ImgUtil.load(vod.getName(), backdrop, binding.backdrop, false);
+        }
         ImgUtil.load(vod.getName(), vod.getPic(), binding.poster);
     }
 
@@ -2219,7 +2227,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         static ThemeColors light() {
             return new ThemeColors(
                     0xFFF3F6F9,
-                    0xEEFFFFFF,
+                    0xCCFFFFFF,
                     0xFFE7EDF3,
                     0xFFEAF0F5,
                     0xFFE5F7EC,
@@ -2231,7 +2239,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
                     0xE612202D,
                     0xFF1D8F5A,
                     0xFF20B866,
-                    0x88F7FAFC
+                    0x4DF7FAFC
             );
         }
     }
