@@ -68,6 +68,7 @@ public class CustomTitleView extends MaterialTextView {
 
     private void onKeyDown(KeyEvent event) {
         if (event.isLongPress() && KeyUtil.isEnterKey(event)) listener.onReloadConfig();
+        else if (KeyUtil.isActionDown(event) && KeyUtil.isEnterKey(event)) listener.showDialog();
         else if (KeyUtil.isActionDown(event) && KeyUtil.isUpKey(event)) onKeyUp();
         else if (KeyUtil.isActionDown(event) && KeyUtil.isLeftKey(event)) listener.setSite(getSite(false));
         else if (KeyUtil.isActionDown(event) && KeyUtil.isRightKey(event)) listener.setSite(getSite(true));

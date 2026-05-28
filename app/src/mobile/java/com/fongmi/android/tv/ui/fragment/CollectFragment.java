@@ -188,7 +188,8 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Colle
 
     private void setSearchColumn() {
         int column = Setting.getSearchColumn();
-        Setting.putSearchColumn(column >= 3 ? 1 : column + 1);
+        int length = getResources().getStringArray(R.array.select_search_column).length;
+        Setting.putSearchColumn((column + 1) % length);
         updateSpanCount();
         mBinding.recycler.post(() -> mBinding.recycler.scrollToPosition(0));
         requireActivity().invalidateOptionsMenu();

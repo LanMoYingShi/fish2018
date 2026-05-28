@@ -1117,7 +1117,6 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         if (isFusionMode()) playInline();
         else {
             VideoActivity.startDirect(this, getKeyText(), getIdText(), vod.getName(), vod.getPic(), selectedEpisode != null ? selectedEpisode.getName() : getMarkText());
-            finish();
         }
     }
 

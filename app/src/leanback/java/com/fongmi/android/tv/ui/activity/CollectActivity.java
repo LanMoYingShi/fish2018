@@ -178,6 +178,8 @@ public class CollectActivity extends BaseActivity {
         mViewModel = new ViewModelProvider(this).get(SiteViewModel.class);
         mViewModel.getSearch().observe(this, result -> {
             if (result.getList().isEmpty()) return;
+            Collect all = getAll();
+            if (all != null) all.getList().addAll(result.getList());
             getFragment().addVideo(result.getList());
             mAdapter.add(Collect.create(result.getList()));
             getPager().getAdapter().notifyDataSetChanged();
@@ -202,28 +204,53 @@ public class CollectActivity extends BaseActivity {
     }
 
     private void setPager() {
+        resetPagerFragments();
         getPager().setAdapter(new PageAdapter(getSupportFragmentManager()));
+    }
+
+    private void resetPagerFragments() {
+        FragmentManager fm = getSupportFragmentManager();
+        var transaction = fm.beginTransaction();
+        boolean changed = false;
+        for (Fragment fragment : fm.getFragments()) {
+            if (fragment instanceof CollectFragment) {
+                transaction.remove(fragment);
+                changed = true;
+            }
+        }
+        if (changed) transaction.commitNowAllowingStateLoss();
     }
 
     private void setSearchUi(View view) {
         int position = Math.max(0, getRecycler().getSelectedPosition());
         Setting.putSearchUi((Setting.getSearchUi() + 1) % getResources().getStringArray(R.array.select_search_ui).length);
         applySearchUi();
-        setPager();
-        mOldView = null;
-        App.post(() -> {
-            if (mAdapter.getItemCount() == 0) return;
-            getRecycler().setSelectedPosition(Math.min(position, mAdapter.getItemCount() - 1));
-            getRecycler().requestFocus();
-        }, 100);
+        rebuildPager(position);
     }
 
     private void setSearchColumn(View view) {
         int column = Setting.getSearchColumn();
-        Setting.putSearchColumn(column >= 3 ? 1 : column + 1);
+        int length = getResources().getStringArray(R.array.select_search_column).length;
+        int position = Math.max(0, getRecycler().getSelectedPosition());
+        Setting.putSearchColumn((column + 1) % length);
         mBinding.searchColumn.setText(getSearchColumn());
-        Fragment fragment = getSupportFragmentManager().findFragmentByTag("android:switcher:" + getPager().getId() + ":" + getPager().getCurrentItem());
-        if (fragment instanceof CollectFragment collect) collect.setColumn();
+        rebuildPager(position);
+    }
+
+    private Collect getAll() {
+        return mAdapter.getItemCount() == 0 ? null : mAdapter.get(0);
+    }
+
+    private void rebuildPager(int position) {
+        setPager();
+        mOldView = null;
+        App.post(() -> {
+            if (mAdapter.getItemCount() == 0) return;
+            int next = Math.min(position, mAdapter.getItemCount() - 1);
+            getRecycler().setSelectedPosition(next);
+            getPager().setCurrentItem(next, false);
+            getRecycler().requestFocus();
+        }, 100);
     }
 
     private void search() {
