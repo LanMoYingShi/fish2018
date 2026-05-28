@@ -508,7 +508,10 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
             binding.playerTitle.setTextColor(0xFFFFFFFF);
             tintInlineControl(binding.playerControls);
         }
-        if (episodeAdapter != null) episodeAdapter.setLight(lightTheme);
+        if (episodeAdapter != null) {
+            episodeAdapter.setLight(lightTheme);
+            episodeAdapter.setActiveStrokeColor(colors.accent);
+        }
     }
 
     private void tintInlineControl(View view) {
@@ -955,7 +958,23 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         List<Episode> visibleEpisodes = visibleEpisodes(episodes);
         bindSeasonEpisodes();
         episodeAdapter.setItems(visibleEpisodes, tmdbEpisodes, selectedEpisode);
+        scrollEpisodeToSelected();
         updatePlayLabel();
+    }
+
+    private void scrollEpisodeToSelected() {
+        if (selectedEpisode == null || episodeAdapter == null) return;
+        binding.episodeContainer.post(() -> {
+            if (selectedEpisode == null) return;
+            int position = episodeAdapter.getPosition(selectedEpisode);
+            if (position < 0) return;
+            RecyclerView.LayoutManager layoutManager = binding.episodeContainer.getLayoutManager();
+            if (layoutManager instanceof LinearLayoutManager linearLayoutManager) {
+                linearLayoutManager.scrollToPositionWithOffset(position, ResUtil.dp2px(12));
+            } else {
+                binding.episodeContainer.scrollToPosition(position);
+            }
+        });
     }
 
     private void renderSeasonSelection() {
@@ -2021,8 +2040,8 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
     }
 
     private void applyChipFocus(MaterialButton button, boolean selected, boolean focused, ThemeColors colors) {
-        button.setStrokeWidth(ResUtil.dp2px(focused ? FOCUS_STROKE_DP : CHIP_STROKE_DP));
-        button.setStrokeColor(ColorStateList.valueOf(focused ? FOCUS_STROKE : (selected ? colors.lineStrong : colors.line)));
+        button.setStrokeWidth(ResUtil.dp2px(focused ? FOCUS_STROKE_DP : (selected ? 2 : CHIP_STROKE_DP)));
+        button.setStrokeColor(ColorStateList.valueOf(focused ? FOCUS_STROKE : (selected ? colors.accent : colors.line)));
     }
 
     private void addMetaChip(String text) {
@@ -2184,7 +2203,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
                     0xD9141B23,
                     0xFF2B3743,
                     0x332B3743,
-                    0x66485A68,
+                    0x6630A86B,
                     0x26FFFFFF,
                     0x4DFFFFFF,
                     0xFFFFFFFF,
@@ -2203,7 +2222,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
                     0xEEFFFFFF,
                     0xFFE7EDF3,
                     0xFFEAF0F5,
-                    0xFFDCE7EF,
+                    0xFFE5F7EC,
                     0x33424B57,
                     0x66424B57,
                     0xFF12202D,
