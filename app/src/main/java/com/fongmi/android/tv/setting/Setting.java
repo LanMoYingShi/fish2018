@@ -6,10 +6,16 @@ import android.os.Build;
 import android.provider.Settings;
 
 import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.bean.TmdbConfig;
+import com.fongmi.android.tv.bean.TmdbMatchCache;
 import com.github.catvod.crawler.DebugLogStore;
 import com.github.catvod.utils.Prefers;
 
 public class Setting {
+
+    public static final int DETAIL_OPEN_FUSION = 0;
+    public static final int DETAIL_OPEN_ENHANCED = 1;
+    public static final int DETAIL_OPEN_DIRECT = 2;
 
     public static String getDoh() {
         return Prefers.getString("doh");
@@ -105,6 +111,79 @@ public class Setting {
 
     public static void putDebugLog(boolean debugLog) {
         DebugLogStore.setEnabled(debugLog);
+    }
+
+    public static String getTmdbConfig() {
+        return Prefers.getString("tmdb_config");
+    }
+
+    public static void putTmdbConfig(String value) {
+        Prefers.put("tmdb_config", value);
+    }
+
+    public static TmdbMatchCache getTmdbMatchCache() {
+        return TmdbMatchCache.objectFrom(Prefers.getString("tmdb_match_cache"));
+    }
+
+    public static void putTmdbMatchCache(TmdbMatchCache cache) {
+        Prefers.put("tmdb_match_cache", App.gson().toJson(cache));
+    }
+
+    public static boolean isTmdbReady() {
+        return TmdbConfig.objectFrom(getTmdbConfig()).isReady();
+    }
+
+    public static int getDetailOpenMode() {
+        int mode;
+        if (Prefers.getPrefers().contains("detail_open_mode")) {
+            mode = clampDetailOpenMode(Prefers.getInt("detail_open_mode", DETAIL_OPEN_ENHANCED));
+        } else if (Prefers.getPrefers().contains("search_detail_page")) {
+            mode = Prefers.getBoolean("search_detail_page") ? DETAIL_OPEN_ENHANCED : DETAIL_OPEN_DIRECT;
+        } else {
+            mode = isTmdbReady() ? DETAIL_OPEN_ENHANCED : DETAIL_OPEN_DIRECT;
+        }
+        return isTmdbMode(mode) && !isTmdbReady() ? DETAIL_OPEN_DIRECT : mode;
+    }
+
+    public static void putDetailOpenMode(int mode) {
+        Prefers.put("detail_open_mode", clampDetailOpenMode(mode));
+    }
+
+    public static int nextDetailOpenMode() {
+        return (getDetailOpenMode() + 1) % 3;
+    }
+
+    public static boolean isSearchDetailPage() {
+        return getDetailOpenMode() == DETAIL_OPEN_ENHANCED;
+    }
+
+    public static boolean isFusionDetailPage() {
+        return getDetailOpenMode() == DETAIL_OPEN_FUSION;
+    }
+
+    public static boolean isDirectDetailPage() {
+        return getDetailOpenMode() == DETAIL_OPEN_DIRECT;
+    }
+
+    public static void putSearchDetailPage(boolean enabled) {
+        putDetailOpenMode(enabled ? DETAIL_OPEN_ENHANCED : DETAIL_OPEN_DIRECT);
+    }
+
+    private static int clampDetailOpenMode(int mode) {
+        if (mode < DETAIL_OPEN_FUSION || mode > DETAIL_OPEN_DIRECT) return DETAIL_OPEN_ENHANCED;
+        return mode;
+    }
+
+    private static boolean isTmdbMode(int mode) {
+        return mode == DETAIL_OPEN_FUSION || mode == DETAIL_OPEN_ENHANCED;
+    }
+
+    public static int getTmdbDetailTheme() {
+        return Prefers.getInt("tmdb_detail_theme", 0);
+    }
+
+    public static void putTmdbDetailTheme(int theme) {
+        Prefers.put("tmdb_detail_theme", Math.max(0, Math.min(theme, 2)));
     }
 
     public static boolean getUpdate() {

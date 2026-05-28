@@ -10,12 +10,15 @@ import android.view.View;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.R;
-import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.bean.TmdbConfig;
 import com.fongmi.android.tv.databinding.ActivitySettingEnhanceBinding;
 import com.fongmi.android.tv.server.Server;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
+import com.fongmi.android.tv.ui.dialog.FeatureConfigDialog;
 import com.fongmi.android.tv.utils.Notify;
 import com.github.catvod.crawler.SpiderDebug;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 public class SettingEnhanceActivity extends BaseActivity {
 
@@ -36,19 +39,56 @@ public class SettingEnhanceActivity extends BaseActivity {
 
     @Override
     protected void initView(Bundle savedInstanceState) {
-        mBinding.driveCheck.requestFocus();
+        mBinding.detailOpenMode.requestFocus();
         setText();
     }
 
     @Override
     protected void initEvent() {
+        mBinding.detailOpenMode.setOnClickListener(this::setDetailOpenMode);
+        mBinding.tmdbConfig.setOnClickListener(this::setTmdbConfig);
         mBinding.driveCheck.setOnClickListener(this::setDriveCheck);
         mBinding.debugLog.setOnClickListener(this::setDebugLog);
     }
 
     private void setText() {
+        mBinding.detailOpenModeText.setText(getDetailOpenMode());
+        mBinding.tmdbConfigText.setText(TmdbConfig.objectFrom(Setting.getTmdbConfig()).isReady() ? R.string.setting_configured : R.string.setting_unconfigured);
         mBinding.driveCheckText.setText(getSwitch(Setting.isDriveCheck()));
         mBinding.debugLogText.setText(getSwitch(Setting.isDebugLog()));
+    }
+
+    private String getDetailOpenMode() {
+        return getDetailOpenModes()[Setting.getDetailOpenMode()];
+    }
+
+    private String[] getDetailOpenModes() {
+        return new String[]{getString(R.string.setting_detail_open_fusion), getString(R.string.setting_detail_open_enhanced), getString(R.string.setting_detail_open_direct)};
+    }
+
+    private void setDetailOpenMode(View view) {
+        new MaterialAlertDialogBuilder(this).setTitle(R.string.setting_detail_open_mode).setNegativeButton(R.string.dialog_negative, null).setSingleChoiceItems(getDetailOpenModes(), Setting.getDetailOpenMode(), (dialog, which) -> {
+            if (requiresTmdb(which) && !Setting.isTmdbReady()) {
+                dialog.dismiss();
+                Notify.show(R.string.detail_tmdb_need_key);
+                FeatureConfigDialog.create(this).type(FeatureConfigDialog.TMDB).onDismiss(() -> {
+                    if (Setting.isTmdbReady()) Setting.putDetailOpenMode(which);
+                    setText();
+                }).show();
+                return;
+            }
+            Setting.putDetailOpenMode(which);
+            mBinding.detailOpenModeText.setText(getDetailOpenMode());
+            dialog.dismiss();
+        }).show();
+    }
+
+    private boolean requiresTmdb(int mode) {
+        return mode == Setting.DETAIL_OPEN_FUSION || mode == Setting.DETAIL_OPEN_ENHANCED;
+    }
+
+    private void setTmdbConfig(View view) {
+        FeatureConfigDialog.create(this).type(FeatureConfigDialog.TMDB).onDismiss(this::setText).show();
     }
 
     private void setDriveCheck(View view) {

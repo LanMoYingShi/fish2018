@@ -253,4 +253,69 @@
         <item>選擇字幕</item>
     </string-array>
 
+    <!-- TMDB Detail -->
+    <string name="detail_tmdb">TMDB</string>
+    <string name="detail_page_title">媒體詳情</string>
+    <string name="detail_aggregate">概覽</string>
+    <string name="detail_back">返回</string>
+    <string name="detail_close">關閉</string>
+    <string name="detail_tmdb_empty">暫無 TMDB 資料</string>
+    <string name="detail_tmdb_cast">演員</string>
+    <string name="detail_tmdb_season">季</string>
+    <string name="detail_season_format">第 %1$d 季</string>
+    <string name="detail_tmdb_works">猜你喜歡</string>
+    <string name="detail_tmdb_photos">劇照</string>
+    <string name="detail_flag">線路</string>
+    <string name="detail_episode">選集</string>
+    <string name="detail_source">站源</string>
+    <string name="detail_source_searching">正在搜尋站源...</string>
+    <string name="detail_source_select">選擇站源</string>
+    <string name="detail_source_current">目前站源：%1$s</string>
+    <string name="detail_source_switching">正在切換站源：%1$s</string>
+    <string name="detail_source_empty">暫無可用站源</string>
+    <string name="detail_source_episode_empty">暫無可用選集或站源</string>
+    <string name="detail_play_now">立即播放</string>
+    <string name="detail_play_resume">繼續播放 - %1$s</string>
+    <string name="detail_expand">展開</string>
+    <string name="detail_collapse">收起</string>
+    <string name="detail_media_tv">劇集</string>
+    <string name="detail_media_movie">電影</string>
+    <string name="detail_media_unknown">詳情</string>
+    <string name="detail_score">評分 %1$s</string>
+    <string name="detail_person_loading">正在載入演員詳情...</string>
+    <string name="detail_person_biography">簡介</string>
+    <string name="detail_person_empty">暫無人物資訊</string>
+    <string name="detail_person_works">參與作品</string>
+    <string name="detail_person_work_hint">作品來自 TMDB，選擇後會在目前站源搜尋。</string>
+    <string name="detail_person_work_count">%1$d 部作品</string>
+    <string name="detail_work_searching">正在目前站源搜尋 %1$s...</string>
+    <string name="detail_work_not_found">目前站源未找到 %1$s</string>
+    <string name="detail_work_global_searching">目前站源未找到，正在全站搜尋 %1$s...</string>
+    <string name="detail_site_not_searchable">目前站源不支援搜尋</string>
+    <string name="detail_tmdb_searching">正在搜尋 TMDB...</string>
+    <string name="detail_tmdb_loading_detail">正在載入 TMDB 詳情...</string>
+    <string name="detail_tmdb_search_hint">搜尋標題</string>
+    <string name="detail_tmdb_search_action">搜尋</string>
+    <string name="detail_tmdb_result_count">共 %1$d 筆</string>
+    <string name="detail_tmdb_match_title">匹配 TMDB 條目</string>
+    <string name="detail_tmdb_rematch">重新匹配</string>
+    <string name="detail_tmdb_match_saved">已記錄 TMDB 匹配</string>
+    <string name="detail_tmdb_skip">跳過</string>
+    <string name="detail_tmdb_need_key">請先設定 TMDB API Key</string>
+    <string name="detail_theme_auto">自動</string>
+    <string name="detail_theme_dark">深色</string>
+    <string name="detail_theme_light">淺色</string>
+    <string name="detail_quality">畫質</string>
+    <string name="play_fullscreen">全螢幕</string>
+    <string name="play_exit_fullscreen">退出</string>
+    <string name="setting_tmdb">TMDB 設定</string>
+    <string name="setting_detail_open_mode">詳情開啟方式</string>
+    <string name="setting_detail_open_fusion">沉浸融合</string>
+    <string name="setting_detail_open_enhanced">增強詳情</string>
+    <string name="setting_detail_open_direct">直達播放</string>
+    <string name="setting_configured">已設定</string>
+    <string name="setting_unconfigured">未設定</string>
+    <string name="dialog_tmdb_key">TMDB API Key</string>
+    <string name="dialog_tmdb_lang">TMDB 語言</string>
+
 </resources>

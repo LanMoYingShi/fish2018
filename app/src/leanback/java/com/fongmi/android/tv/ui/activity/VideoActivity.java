@@ -143,6 +143,26 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         start(activity, key, id, name, pic, null, true, false);
     }
 
+    private static boolean canOpenEnhancedDetail(String key, boolean cast) {
+        return !cast && !TextUtils.isEmpty(key) && !SiteApi.PUSH.equals(key);
+    }
+
+    private static boolean shouldOpenFusionDetail(String key, boolean cast) {
+        return canOpenEnhancedDetail(key, cast) && Setting.isFusionDetailPage();
+    }
+
+    private static boolean shouldOpenIntermediateDetail(String key, boolean cast) {
+        return canOpenEnhancedDetail(key, cast) && Setting.isSearchDetailPage();
+    }
+
+    public static void startDirect(Activity activity, String key, String id, String name, String pic) {
+        startDirect(activity, key, id, name, pic, null);
+    }
+
+    public static void startDirect(Activity activity, String key, String id, String name, String pic, String mark) {
+        startInternal(activity, key, id, name, pic, mark, false, false, true);
+    }
+
     public static void start(Activity activity, String url) {
         start(activity, SiteApi.PUSH, url, url);
     }
@@ -160,7 +180,20 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, boolean cast) {
+        startInternal(activity, key, id, name, pic, mark, collect, cast, false);
+    }
+
+    private static void startInternal(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, boolean cast, boolean skipIntermediate) {
+        if (!skipIntermediate && shouldOpenIntermediateDetail(key, cast)) {
+            TmdbDetailActivity.start(activity, key, id, name, pic, mark);
+            return;
+        }
+        if (!skipIntermediate && shouldOpenFusionDetail(key, cast)) {
+            TmdbDetailActivity.startFusion(activity, key, id, name, pic, mark);
+            return;
+        }
         Intent intent = new Intent(activity, VideoActivity.class);
+        intent.putExtra("fusion", false);
         intent.putExtra("collect", collect);
         intent.putExtra("cast", cast);
         intent.putExtra("mark", mark);
@@ -175,23 +208,23 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         return getIntent().getBooleanExtra("cast", false);
     }
 
-    private String getName() {
+    protected String getName() {
         return Objects.toString(getIntent().getStringExtra("name"), "");
     }
 
-    private String getPic() {
+    protected String getPic() {
         return Objects.toString(getIntent().getStringExtra("pic"), "");
     }
 
-    private String getMark() {
+    protected String getMark() {
         return Objects.toString(getIntent().getStringExtra("mark"), "");
     }
 
-    private String getKey() {
+    protected String getKey() {
         return Objects.toString(getIntent().getStringExtra("key"), "");
     }
 
-    private String getId() {
+    protected String getId() {
         return Objects.toString(getIntent().getStringExtra("id"), "");
     }
 
@@ -199,7 +232,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         return getKey().concat(AppDatabase.SYMBOL).concat(getId()).concat(AppDatabase.SYMBOL) + VodConfig.getCid();
     }
 
-    private Site getSite() {
+    protected Site getSite() {
         return VodConfig.get().getSite(getKey());
     }
 
@@ -446,6 +479,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         checkKeepImg();
         setText(item);
         updateKeep();
+        onDetailReady(item);
+    }
+
+    protected void onDetailReady(Vod item) {
     }
 
     private void setText(Vod item) {
@@ -997,7 +1034,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         }
     }
 
-    private void updateVod(Vod item) {
+    protected void updateVod(Vod item) {
         boolean id = !item.getId().isEmpty();
         boolean pic = !item.getPic().isEmpty();
         boolean name = !item.getName().isEmpty();
