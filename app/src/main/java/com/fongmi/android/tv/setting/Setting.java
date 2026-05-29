@@ -134,7 +134,7 @@ public class Setting {
     }
 
     private static int clampSearchColumn(int column) {
-        return Math.max(0, Math.min(column, 3));
+        return column == 1 ? 1 : 0;
     }
 
     public static boolean isDebugLog() {

@@ -38,9 +38,17 @@ public class VodPresenter extends Presenter {
     }
 
     public VodPresenter(OnClickListener listener, Style style, int column) {
+        this(listener, style, ResUtil.getScreenWidth(), column);
+    }
+
+    public VodPresenter(OnClickListener listener, int width, int column) {
+        this(listener, Style.rect(), width, column);
+    }
+
+    public VodPresenter(OnClickListener listener, Style style, int width, int column) {
         this.listener = listener;
         this.style = style;
-        this.size = Product.getSpec(ResUtil.dp2px(48) + ResUtil.dp2px(16 * (column - 1)), column, style);
+        this.size = Product.getSpec(width, ResUtil.dp2px(48) + ResUtil.dp2px(16 * (column - 1)), column, style);
     }
 
     public interface OnClickListener {

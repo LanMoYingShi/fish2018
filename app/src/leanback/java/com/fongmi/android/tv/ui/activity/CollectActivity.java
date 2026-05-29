@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.text.TextUtils;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 
@@ -34,6 +35,7 @@ import com.fongmi.android.tv.ui.adapter.CollectAdapter;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.CustomViewPager;
 import com.fongmi.android.tv.ui.fragment.CollectFragment;
+import com.fongmi.android.tv.utils.KeyUtil;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.google.gson.reflect.TypeToken;
@@ -48,6 +50,7 @@ public class CollectActivity extends BaseActivity {
     private SiteViewModel mViewModel;
     private List<Site> mSites;
     private View mOldView;
+    private boolean mKeepActionFocus;
 
     public static void start(Activity activity, String keyword) {
         start(activity, keyword, "");
@@ -61,7 +64,11 @@ public class CollectActivity extends BaseActivity {
     }
 
     private CollectFragment getFragment() {
-        return (CollectFragment) getPager().getAdapter().instantiateItem(getPager(), 0);
+        return getFragment(getPager().getCurrentItem());
+    }
+
+    private CollectFragment getFragment(int position) {
+        return (CollectFragment) getPager().getAdapter().instantiateItem(getPager(), position);
     }
 
     private String getKeyword() {
@@ -106,6 +113,8 @@ public class CollectActivity extends BaseActivity {
     protected void initEvent() {
         mBinding.searchColumn.setOnClickListener(this::setSearchColumn);
         mBinding.searchUi.setOnClickListener(this::setSearchUi);
+        mBinding.searchColumn.setOnKeyListener(this::focusRecyclerOnDown);
+        mBinding.searchUi.setOnKeyListener(this::focusRecyclerOnDown);
         mBinding.horiPager.addOnPageChangeListener(new ViewPager.SimpleOnPageChangeListener() {
             @Override
             public void onPageSelected(int position) {
@@ -126,12 +135,27 @@ public class CollectActivity extends BaseActivity {
                 onChildSelected(child);
             }
         });
+        mBinding.horiRecycler.setOnKeyListener(this::focusResultOnDown);
         mBinding.vertRecycler.addOnChildViewHolderSelectedListener(new OnChildViewHolderSelectedListener() {
             @Override
             public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
                 onChildSelected(child);
             }
         });
+        mBinding.vertRecycler.setOnKeyListener(this::focusResultOnDown);
+    }
+
+    private boolean focusRecyclerOnDown(View view, int keyCode, KeyEvent event) {
+        if (!KeyUtil.isActionDown(event) || !KeyUtil.isDownKey(event)) return false;
+        getRecycler().setSelectedPosition(0);
+        getRecycler().requestFocus();
+        return true;
+    }
+
+    private boolean focusResultOnDown(View view, int keyCode, KeyEvent event) {
+        if (!KeyUtil.isActionDown(event) || !KeyUtil.isDownKey(event)) return false;
+        getFragment().requestResultFocus();
+        return true;
     }
 
     private void setRecyclerView() {
@@ -154,8 +178,10 @@ public class CollectActivity extends BaseActivity {
     private void applySearchUi() {
         mBinding.horiLayout.setVisibility(Setting.getSearchUi() == 0 ? View.VISIBLE : View.GONE);
         mBinding.vertLayout.setVisibility(Setting.getSearchUi() == 1 ? View.VISIBLE : View.GONE);
-        mBinding.searchColumn.setText(getSearchColumn());
-        mBinding.searchUi.setText(getSearchUi());
+        mBinding.searchColumn.setImageResource(getSearchColumnIcon());
+        mBinding.searchColumn.setContentDescription(getSearchColumnAction());
+        mBinding.searchUi.setImageResource(getSearchUiIcon());
+        mBinding.searchUi.setContentDescription(getSearchUiAction());
     }
 
     private CustomViewPager getPager() {
@@ -170,8 +196,32 @@ public class CollectActivity extends BaseActivity {
         return getResources().getStringArray(R.array.select_search_ui)[Setting.getSearchUi()];
     }
 
-    private String getSearchColumn() {
-        return getResources().getStringArray(R.array.select_search_column)[Setting.getSearchColumn()];
+    private String getSearchUiAction() {
+        return getString(R.string.setting_search_ui) + ": " + getSearchUiTarget();
+    }
+
+    private String getSearchUiTarget() {
+        return getResources().getStringArray(R.array.select_search_ui)[(Setting.getSearchUi() + 1) % getResources().getStringArray(R.array.select_search_ui).length];
+    }
+
+    private int getSearchUiIcon() {
+        return Setting.getSearchUi() == 0 ? R.drawable.ic_search_ui_vertical : R.drawable.ic_search_ui_horizontal;
+    }
+
+    private String getSearchColumnAction() {
+        return getString(R.string.setting_search_column) + ": " + getSearchColumnTarget();
+    }
+
+    private String getSearchColumnTarget() {
+        return getResources().getStringArray(R.array.select_search_column)[isSearchList() ? 0 : 1];
+    }
+
+    private int getSearchColumnIcon() {
+        return isSearchList() ? R.drawable.ic_site_grid : R.drawable.ic_site_list;
+    }
+
+    private boolean isSearchList() {
+        return Setting.getSearchColumn() == 1;
     }
 
     private void setViewModel() {
@@ -180,7 +230,7 @@ public class CollectActivity extends BaseActivity {
             if (result.getList().isEmpty()) return;
             Collect all = getAll();
             if (all != null) all.getList().addAll(result.getList());
-            getFragment().addVideo(result.getList());
+            getFragment(0).addVideo(result.getList());
             mAdapter.add(Collect.create(result.getList()));
             getPager().getAdapter().notifyDataSetChanged();
         });
@@ -223,25 +273,24 @@ public class CollectActivity extends BaseActivity {
 
     private void setSearchUi(View view) {
         int position = Math.max(0, getRecycler().getSelectedPosition());
+        mKeepActionFocus = true;
         Setting.putSearchUi((Setting.getSearchUi() + 1) % getResources().getStringArray(R.array.select_search_ui).length);
         applySearchUi();
-        rebuildPager(position);
+        rebuildPager(position, view);
     }
 
     private void setSearchColumn(View view) {
-        int column = Setting.getSearchColumn();
-        int length = getResources().getStringArray(R.array.select_search_column).length;
-        int position = Math.max(0, getRecycler().getSelectedPosition());
-        Setting.putSearchColumn((column + 1) % length);
-        mBinding.searchColumn.setText(getSearchColumn());
-        rebuildPager(position);
+        Setting.putSearchColumn(isSearchList() ? 0 : 1);
+        applySearchUi();
+        refreshFragments();
+        view.requestFocus();
     }
 
     private Collect getAll() {
         return mAdapter.getItemCount() == 0 ? null : mAdapter.get(0);
     }
 
-    private void rebuildPager(int position) {
+    private void rebuildPager(int position, View focus) {
         setPager();
         mOldView = null;
         App.post(() -> {
@@ -249,8 +298,15 @@ public class CollectActivity extends BaseActivity {
             int next = Math.min(position, mAdapter.getItemCount() - 1);
             getRecycler().setSelectedPosition(next);
             getPager().setCurrentItem(next, false);
-            getRecycler().requestFocus();
+            if (focus != null) focus.requestFocus();
+            else getRecycler().requestFocus();
         }, 100);
+    }
+
+    private void refreshFragments() {
+        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+            if (fragment instanceof CollectFragment collect) collect.setColumn();
+        }
     }
 
     private void search() {
@@ -274,6 +330,10 @@ public class CollectActivity extends BaseActivity {
     private final Runnable mRunnable = new Runnable() {
         @Override
         public void run() {
+            if (mKeepActionFocus) {
+                mKeepActionFocus = false;
+                return;
+            }
             getPager().setCurrentItem(getRecycler().getSelectedPosition());
         }
     };

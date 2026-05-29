@@ -246,8 +246,6 @@
     <string-array name="select_search_column">
         <item>Auto</item>
         <item>1 item</item>
-        <item>2 items</item>
-        <item>3 items</item>
     </string-array>
 
     <string-array name="select_scale">
