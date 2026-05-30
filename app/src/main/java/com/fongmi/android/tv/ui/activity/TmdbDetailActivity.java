@@ -154,6 +154,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
     private int playerIndex = -1;
     private int requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
     private int detailThemeMode;
+    private int loadGeneration;
     private boolean lightTheme;
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark) {
@@ -626,11 +627,11 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
     }
 
     private void loadContent(@Nullable TmdbBundle reusableBundle) {
+        int generation = ++loadGeneration;
         Task.execute(() -> {
+            Future<TmdbLoadResult> tmdbFuture = reusableBundle == null && tmdbConfig.isReady() ? Task.executor().submit(this::loadTmdbResult) : null;
             Vod loadedVod = null;
             String error = null;
-            TmdbBundle tmdbBundle = reusableBundle;
-            List<TmdbItem> searchItems = new ArrayList<>();
             try {
                 Result result = SiteApi.detailContent(getKeyText(), getIdText());
                 if (result != null && !result.getList().isEmpty()) {
@@ -643,35 +644,24 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
                 error = e.getMessage();
             }
 
-            if (tmdbBundle == null && tmdbConfig.isReady()) {
-                try {
-                    if (initialTmdbItem != null) {
-                        tmdbBundle = loadTmdbBundle(initialTmdbItem);
-                    } else {
-                        TmdbItem match = getCachedTmdbMatch();
-                        if (match != null) {
-                            try {
-                                tmdbBundle = loadTmdbBundle(match);
-                            } catch (Throwable ignored) {
-                                match = null;
-                                tmdbBundle = null;
-                            }
-                        }
-                        if (match == null) {
-                            searchItems = tmdbService.search(getNameText(), tmdbConfig);
-                            match = chooseTmdbMatch(searchItems, getNameText());
-                        }
-                        if (match != null && tmdbBundle == null) tmdbBundle = loadTmdbBundle(match);
-                    }
-                } catch (Throwable ignored) {
-                }
-            }
-
             Vod finalVod = loadedVod;
             String finalError = error;
-            TmdbBundle finalBundle = tmdbBundle;
-            List<TmdbItem> finalSearchItems = searchItems;
-            runOnAliveUi(() -> applyLoaded(finalVod, finalBundle, finalSearchItems, finalError));
+            runOnAliveUi(() -> {
+                if (generation != loadGeneration) return;
+                applyLoaded(finalVod, reusableBundle, new ArrayList<>(), finalError, false);
+            });
+            if (finalVod == null || tmdbFuture == null) {
+                if (tmdbFuture != null) tmdbFuture.cancel(true);
+                return;
+            }
+            try {
+                TmdbLoadResult result = tmdbFuture.get();
+                runOnAliveUi(() -> {
+                    if (generation != loadGeneration || vod == null) return;
+                    applyTmdbResult(result);
+                });
+            } catch (Throwable ignored) {
+            }
         });
     }
 
@@ -687,6 +677,10 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
     }
 
     private void applyLoaded(Vod loadedVod, TmdbBundle bundle, List<TmdbItem> searchItems, String error) {
+        applyLoaded(loadedVod, bundle, searchItems, error, true);
+    }
+
+    private void applyLoaded(Vod loadedVod, TmdbBundle bundle, List<TmdbItem> searchItems, String error, boolean allowMatchDialog) {
         binding.loading.setVisibility(View.GONE);
         if (loadedVod == null) {
             if (!TextUtils.isEmpty(error)) Notify.show(error);
@@ -702,7 +696,50 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         bindPage();
         focusInlinePlayerPanel();
         maybeAutoPlayInline();
-        if (tmdbConfig.isReady() && bundle == null && initialTmdbItem == null) showTmdbMatchDialog(searchItems);
+        if (allowMatchDialog && tmdbConfig.isReady() && bundle == null && initialTmdbItem == null) showTmdbMatchDialog(searchItems);
+    }
+
+    private TmdbLoadResult loadTmdbResult() {
+        TmdbBundle tmdbBundle = null;
+        List<TmdbItem> searchItems = new ArrayList<>();
+        try {
+            if (initialTmdbItem != null) {
+                tmdbBundle = loadTmdbBundle(initialTmdbItem);
+            } else {
+                TmdbItem match = getCachedTmdbMatch();
+                if (match != null) {
+                    try {
+                        tmdbBundle = loadTmdbBundle(match);
+                    } catch (Throwable ignored) {
+                        match = null;
+                        tmdbBundle = null;
+                    }
+                }
+                if (match == null) {
+                    searchItems = tmdbService.search(getNameText(), tmdbConfig);
+                    match = chooseTmdbMatch(searchItems, getNameText());
+                }
+                if (match != null && tmdbBundle == null) tmdbBundle = loadTmdbBundle(match);
+            }
+        } catch (Throwable ignored) {
+        }
+        return new TmdbLoadResult(tmdbBundle, searchItems);
+    }
+
+    private void applyTmdbResult(TmdbLoadResult result) {
+        TmdbBundle bundle = result == null ? null : result.bundle();
+        applyTmdbBundle(bundle);
+        if (bundle != null && initialTmdbItem != null) saveTmdbMatch(bundle.item());
+        enrichVod();
+        bindBackdrop();
+        bindHeader();
+        bindMeta();
+        bindOverview();
+        renderSeasonSelection();
+        renderEpisodes();
+        bindTmdbSection();
+        focusInlinePlayerPanel();
+        if (tmdbConfig.isReady() && bundle == null && initialTmdbItem == null) showTmdbMatchDialog(result == null ? List.of() : result.searchItems());
     }
 
     private TmdbBundle loadTmdbBundle(TmdbItem item) throws Exception {
@@ -719,13 +756,6 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         if ("tv".equalsIgnoreCase(item.getMediaType())) {
             seasonCounts = seasonEpisodeCounts(detail);
             seasons.addAll(seasonCounts.keySet());
-            int seasonNumber = firstSeasonNumber(detail);
-            if (seasonNumber >= 0) {
-                JsonObject season = tmdbService.season(item, seasonNumber, tmdbConfig, detail);
-                seasonEpisodes.put(seasonNumber, tmdbService.episodes(season, tmdbConfig));
-                seasonCast.put(seasonNumber, tmdbService.seasonCast(season, tmdbConfig));
-                seasonPhotos.put(seasonNumber, tmdbService.seasonPhotos(season, tmdbConfig));
-            }
         }
         return new TmdbBundle(item, detail, cast, photos, related, seasons, seasonCounts, seasonEpisodes, seasonCast, seasonPhotos);
     }
@@ -2696,6 +2726,9 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
     }
 
     private record TmdbBundle(TmdbItem item, JsonObject detail, List<TmdbPerson> cast, List<String> photos, List<TmdbItem> related, List<Integer> seasons, Map<Integer, Integer> seasonCounts, Map<Integer, List<TmdbEpisode>> seasonEpisodes, Map<Integer, List<TmdbPerson>> seasonCast, Map<Integer, List<String>> seasonPhotos) {
+    }
+
+    private record TmdbLoadResult(TmdbBundle bundle, List<TmdbItem> searchItems) {
     }
 
     private record SourceMatch(Site site, Vod vod, int score) {
