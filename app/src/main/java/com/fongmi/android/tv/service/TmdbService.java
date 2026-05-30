@@ -165,6 +165,77 @@ public class TmdbService {
         return items;
     }
 
+    public List<TmdbPerson> creators(JsonObject detail, @NonNull TmdbConfig config) {
+        Map<Integer, CrewEntry> entries = new LinkedHashMap<>();
+        addAggregateCrew(entries, array(detail, "aggregate_credits", "crew"), config);
+        addCreditCrew(entries, array(detail, "credits", "crew"), config);
+        List<TmdbPerson> items = new ArrayList<>();
+        for (CrewEntry entry : entries.values()) {
+            if (entry.jobs.isEmpty()) continue;
+            items.add(new TmdbPerson(entry.id, entry.name, TextUtils.join(" / ", entry.jobs), entry.profile, entry.department, ""));
+            if (items.size() >= 12) break;
+        }
+        return items;
+    }
+
+    private void addAggregateCrew(Map<Integer, CrewEntry> entries, JsonArray results, TmdbConfig config) {
+        for (JsonElement element : results) {
+            if (!element.isJsonObject()) continue;
+            JsonObject object = element.getAsJsonObject();
+            if (!object.has("id") || object.get("id").isJsonNull()) continue;
+            CrewEntry entry = crewEntry(entries, object, config);
+            for (JsonElement jobElement : array(object, "jobs")) {
+                if (!jobElement.isJsonObject()) continue;
+                addCreatorJob(entry, string(jobElement.getAsJsonObject(), "job"), string(object, "department", "known_for_department"));
+            }
+        }
+    }
+
+    private void addCreditCrew(Map<Integer, CrewEntry> entries, JsonArray results, TmdbConfig config) {
+        for (JsonElement element : results) {
+            if (!element.isJsonObject()) continue;
+            JsonObject object = element.getAsJsonObject();
+            if (!object.has("id") || object.get("id").isJsonNull()) continue;
+            CrewEntry entry = crewEntry(entries, object, config);
+            addCreatorJob(entry, string(object, "job"), string(object, "department", "known_for_department"));
+        }
+    }
+
+    private CrewEntry crewEntry(Map<Integer, CrewEntry> entries, JsonObject object, TmdbConfig config) {
+        int id = object.get("id").getAsInt();
+        CrewEntry entry = entries.get(id);
+        if (entry != null) return entry;
+        entry = new CrewEntry(id, string(object, "name"), image(config.getImageBase(), string(object, "profile_path")), string(object, "department", "known_for_department"));
+        entries.put(id, entry);
+        return entry;
+    }
+
+    private void addCreatorJob(CrewEntry entry, String job, String department) {
+        String normalized = creatorJob(job, department);
+        if (TextUtils.isEmpty(normalized) || entry.jobs.contains(normalized)) return;
+        int index = 0;
+        while (index < entry.jobs.size() && creatorJobOrder(entry.jobs.get(index)) <= creatorJobOrder(normalized)) index++;
+        entry.jobs.add(index, normalized);
+    }
+
+    private String creatorJob(String job, String department) {
+        if (TextUtils.isEmpty(job) && TextUtils.isEmpty(department)) return "";
+        String value = TextUtils.isEmpty(job) ? department : job;
+        String lower = value.toLowerCase(Locale.ROOT);
+        String group = (department + " " + job).toLowerCase(Locale.ROOT);
+        if (lower.contains("director") || group.contains("directing")) return "导演";
+        if (lower.contains("writer") || lower.contains("screenplay") || lower.contains("story") || lower.contains("teleplay") || group.contains("writing")) return "编剧";
+        if (lower.contains("producer") || group.contains("production")) return "制片";
+        return "";
+    }
+
+    private int creatorJobOrder(String job) {
+        if ("导演".equals(job)) return 0;
+        if ("编剧".equals(job)) return 1;
+        if ("制片".equals(job)) return 2;
+        return 3;
+    }
+
     public List<TmdbEpisode> episodes(JsonObject season, @NonNull TmdbConfig config) {
         List<TmdbEpisode> items = new ArrayList<>();
         JsonArray results = array(season, "episodes");
@@ -537,6 +608,22 @@ public class TmdbService {
     private String sortDate(TmdbItem item) {
         String subtitle = item.getSubtitle();
         return subtitle == null ? "" : subtitle.replaceAll("^.*?(\\d{4}.*)$", "$1");
+    }
+
+    private static class CrewEntry {
+
+        private final int id;
+        private final String name;
+        private final String profile;
+        private final String department;
+        private final List<String> jobs = new ArrayList<>();
+
+        private CrewEntry(int id, String name, String profile, String department) {
+            this.id = id;
+            this.name = name;
+            this.profile = profile;
+            this.department = department;
+        }
     }
 
     private JsonArray array(JsonObject object, String... keys) {

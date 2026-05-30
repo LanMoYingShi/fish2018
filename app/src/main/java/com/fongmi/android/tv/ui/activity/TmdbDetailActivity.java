@@ -114,6 +114,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
     private final TmdbService tmdbService = new TmdbService();
     private final List<TmdbPerson> detailCastItems = new ArrayList<>();
     private final List<TmdbPerson> castItems = new ArrayList<>();
+    private final List<TmdbPerson> creatorItems = new ArrayList<>();
     private final List<TmdbItem> relatedItems = new ArrayList<>();
     private final Map<Integer, TmdbEpisode> tmdbEpisodes = new HashMap<>();
     private final List<Integer> seasonNumbers = new ArrayList<>();
@@ -137,6 +138,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
     private Episode selectedEpisode;
     private TmdbEpisodeAdapter episodeAdapter;
     private TmdbPersonAdapter castAdapter;
+    private TmdbPersonAdapter creatorAdapter;
     private TmdbPhotoAdapter episodePhotoAdapter;
     private TmdbRailAdapter relatedAdapter;
     private boolean overviewExpanded;
@@ -275,6 +277,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         episodeAdapter.setItems(List.of(), Map.of(), null);
         if (episodePhotoAdapter != null) episodePhotoAdapter.setItems(List.of());
         castAdapter.setItems(new ArrayList<>());
+        creatorAdapter.setItems(new ArrayList<>());
         relatedAdapter.setItems(new ArrayList<>());
         binding.tmdbStatus.setVisibility(View.GONE);
         if (!TextUtils.isEmpty(getPicText())) {
@@ -337,6 +340,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
             }
         });
         castAdapter = new TmdbPersonAdapter(this::loadPersonDetail);
+        creatorAdapter = new TmdbPersonAdapter(this::loadPersonDetail);
         episodePhotoAdapter = new TmdbPhotoAdapter(this::showPhotoDialog);
         relatedAdapter = new TmdbRailAdapter(this::openRelatedItem);
         updateEpisodeLayoutManager();
@@ -348,6 +352,9 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         binding.castList.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
         binding.castList.setNestedScrollingEnabled(false);
         binding.castList.setAdapter(castAdapter);
+        binding.creatorList.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
+        binding.creatorList.setNestedScrollingEnabled(false);
+        binding.creatorList.setAdapter(creatorAdapter);
         binding.relatedList.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
         binding.relatedList.setNestedScrollingEnabled(false);
         binding.relatedList.setAdapter(relatedAdapter);
@@ -769,7 +776,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
             seasonCounts = seasonEpisodeCounts(detail);
             seasons.addAll(seasonCounts.keySet());
         }
-        return new TmdbBundle(item, detail, List.of(), List.of(), List.of(), seasons, seasonCounts, seasonEpisodes, seasonCast, seasonPhotos);
+        return new TmdbBundle(item, detail, List.of(), List.of(), List.of(), List.of(), seasons, seasonCounts, seasonEpisodes, seasonCast, seasonPhotos);
     }
 
     private void loadTmdbMediaBlocks(TmdbBundle bundle) {
@@ -779,10 +786,15 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         bindTmdbSection();
         Task.execute(() -> {
             List<TmdbPerson> cast = new ArrayList<>();
+            List<TmdbPerson> creators = new ArrayList<>();
             List<String> photos = new ArrayList<>();
             List<TmdbItem> related = new ArrayList<>();
             try {
                 cast = tmdbService.cast(bundle.detail(), tmdbConfig);
+            } catch (Throwable ignored) {
+            }
+            try {
+                creators = tmdbService.creators(bundle.detail(), tmdbConfig);
             } catch (Throwable ignored) {
             }
             try {
@@ -795,6 +807,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
             } catch (Throwable ignored) {
             }
             List<TmdbPerson> finalCast = cast;
+            List<TmdbPerson> finalCreators = creators;
             List<String> finalPhotos = photos;
             List<TmdbItem> finalRelated = related;
             runOnAliveUi(() -> {
@@ -802,6 +815,8 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
                 tmdbMediaLoading = false;
                 detailCastItems.clear();
                 detailCastItems.addAll(finalCast);
+                creatorItems.clear();
+                creatorItems.addAll(finalCreators);
                 relatedItems.clear();
                 relatedItems.addAll(finalRelated);
                 detailTmdbPhotos.clear();
@@ -820,6 +835,8 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         if (bundle != null) detailCastItems.addAll(bundle.cast());
         castItems.clear();
         castItems.addAll(detailCastItems);
+        creatorItems.clear();
+        if (bundle != null) creatorItems.addAll(bundle.creators());
         detailTmdbPhotos.clear();
         if (bundle != null) detailTmdbPhotos.addAll(bundle.photos());
         tmdbEpisodePhotos.clear();
@@ -1305,9 +1322,10 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
             return;
         }
         boolean hasCast = !castItems.isEmpty();
+        boolean hasCreators = !creatorItems.isEmpty();
         boolean hasPhotos = !tmdbEpisodePhotos.isEmpty();
         boolean hasRelated = !relatedItems.isEmpty();
-        binding.tmdbSection.setVisibility(hasPhotos || hasCast || hasRelated || matchedTmdbDetail != null || canMatchTmdb() ? View.VISIBLE : View.GONE);
+        binding.tmdbSection.setVisibility(hasPhotos || hasCast || hasCreators || hasRelated || matchedTmdbDetail != null || canMatchTmdb() ? View.VISIBLE : View.GONE);
 
         binding.episodePhotoTitle.setVisibility(hasPhotos ? View.VISIBLE : View.GONE);
         binding.episodePhotoList.setVisibility(hasPhotos ? View.VISIBLE : View.GONE);
@@ -1317,6 +1335,11 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         binding.castTitle.setVisibility(hasCast ? View.VISIBLE : View.GONE);
         binding.castList.setVisibility(hasCast ? View.VISIBLE : View.GONE);
         castAdapter.setItems(castItems);
+
+        setTopMargin(binding.creatorTitle, hasCast ? 20 : hasPhotos ? 20 : 0);
+        binding.creatorTitle.setVisibility(hasCreators ? View.VISIBLE : View.GONE);
+        binding.creatorList.setVisibility(hasCreators ? View.VISIBLE : View.GONE);
+        creatorAdapter.setItems(creatorItems);
 
         binding.relatedTitle.setVisibility(hasRelated ? View.VISIBLE : View.GONE);
         binding.relatedList.setVisibility(hasRelated ? View.VISIBLE : View.GONE);
@@ -1328,7 +1351,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         } else if (!isTmdbAllowedForCurrentSite()) {
             binding.tmdbStatus.setVisibility(View.VISIBLE);
             binding.tmdbStatus.setText(R.string.detail_tmdb_site_disabled);
-        } else if (!hasPhotos && !hasCast && !hasRelated) {
+        } else if (!hasPhotos && !hasCast && !hasCreators && !hasRelated) {
             binding.tmdbStatus.setVisibility(View.VISIBLE);
             binding.tmdbStatus.setText(R.string.detail_tmdb_empty);
         } else {
@@ -1699,7 +1722,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
     private String historyEpisodeTitle(Episode episode) {
         int number = episodeNumberForHistory(episode);
         TmdbEpisode tmdbEpisode = number <= 0 ? null : tmdbEpisodes.get(number);
-        String label = number > 0 ? "第" + number + "集" : episode.getDisplayName();
+        String label = number > 0 ? number + "." : episode.getDisplayName();
         String title = tmdbEpisode == null ? "" : tmdbEpisode.getTitle();
         if (TextUtils.isEmpty(title) || title.equals(label) || title.equals(episode.getName())) return label;
         return label + " " + title;
@@ -2956,7 +2979,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
                 Objects.toString(getIntent().getStringExtra("tmdb_credit"), ""));
     }
 
-    private record TmdbBundle(TmdbItem item, JsonObject detail, List<TmdbPerson> cast, List<String> photos, List<TmdbItem> related, List<Integer> seasons, Map<Integer, Integer> seasonCounts, Map<Integer, List<TmdbEpisode>> seasonEpisodes, Map<Integer, List<TmdbPerson>> seasonCast, Map<Integer, List<String>> seasonPhotos) {
+    private record TmdbBundle(TmdbItem item, JsonObject detail, List<TmdbPerson> cast, List<TmdbPerson> creators, List<String> photos, List<TmdbItem> related, List<Integer> seasons, Map<Integer, Integer> seasonCounts, Map<Integer, List<TmdbEpisode>> seasonEpisodes, Map<Integer, List<TmdbPerson>> seasonCast, Map<Integer, List<String>> seasonPhotos) {
     }
 
     private record TmdbLoadResult(TmdbBundle bundle, List<TmdbItem> searchItems) {

@@ -280,6 +280,7 @@
     <string name="detail_close">Close</string>
     <string name="detail_tmdb_empty">No TMDB data</string>
     <string name="detail_tmdb_cast">Cast</string>
+    <string name="detail_tmdb_creators">Creators</string>
     <string name="detail_tmdb_season">Seasons</string>
     <string name="detail_season_format">Season %1$d</string>
     <string name="detail_tmdb_works">You Might Like</string>

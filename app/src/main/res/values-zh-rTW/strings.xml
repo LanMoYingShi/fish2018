@@ -274,6 +274,7 @@
     <string name="detail_close">關閉</string>
     <string name="detail_tmdb_empty">暫無 TMDB 資料</string>
     <string name="detail_tmdb_cast">演員</string>
+    <string name="detail_tmdb_creators">主創團隊</string>
     <string name="detail_tmdb_season">季</string>
     <string name="detail_season_format">第 %1$d 季</string>
     <string name="detail_tmdb_works">猜你喜歡</string>
