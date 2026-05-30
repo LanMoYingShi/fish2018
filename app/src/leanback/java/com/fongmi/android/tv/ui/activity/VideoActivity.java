@@ -657,7 +657,9 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void updateFocus() {
-        mEpisodeAdapter.setNextFocusUp(findFocusUp(2));
+        int episodeFocusUp = findFocusUp(2);
+        mBinding.episodeMore.setNextFocusUpId(episodeFocusUp == 0 ? R.id.episodeMore : episodeFocusUp);
+        mEpisodeAdapter.setNextFocusUp(isVisible(mBinding.episodeMore) ? R.id.episodeMore : episodeFocusUp);
         mFlagAdapter.setNextFocusDown(findFocusDown(0));
         mEpisodeAdapter.setNextFocusDown(findFocusDown(2));
         notifyItemChanged(mBinding.episode, mEpisodeAdapter);
