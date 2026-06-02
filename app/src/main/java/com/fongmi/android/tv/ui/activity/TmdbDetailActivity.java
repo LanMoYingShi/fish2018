@@ -410,7 +410,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
 
             @Override
             public void onDanmakuStateChanged(boolean show) {
-                binding.playerDanmaku.setSelected(show);
+                binding.playerDanmakuToggle.setImageResource(show ? R.drawable.ic_control_danmaku_on : R.drawable.ic_control_danmaku_off);
             }
         });
         inlineClock = Clock.create();
@@ -452,6 +452,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         binding.playerTextTrack.setOnLongClickListener(view -> showInlineSubtitle());
         binding.playerAudioTrack.setOnClickListener(this::showInlineTrack);
         binding.playerVideoTrack.setOnClickListener(this::showInlineTrack);
+        binding.playerDanmakuToggle.setOnClickListener(view -> toggleInlineDanmaku());
         binding.playerDanmaku.setOnClickListener(view -> showInlineDanmaku());
         binding.playerExternal.setOnClickListener(view -> openInlineExternal());
         binding.playerExternal.setOnLongClickListener(view -> inlineControlController.showPlayerInfo());
@@ -498,6 +499,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         setupInlineControl(binding.playerTextTrack);
         setupInlineControl(binding.playerAudioTrack);
         setupInlineControl(binding.playerVideoTrack);
+        setupInlineControl(binding.playerDanmakuToggle);
         setupInlineControl(binding.playerDanmaku);
         setupInlineControl(binding.playerEpisodes);
     }
@@ -2013,6 +2015,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         setButtonEnabled(binding.playerAudioTrack, hasPlayer);
         setButtonEnabled(binding.playerVideoTrack, hasPlayer);
         setButtonEnabled(binding.playerDanmaku, hasPlayer && inlineControlController.hasDanmakuControl());
+        setButtonEnabled(binding.playerDanmakuToggle, hasPlayer && inlineControlController.hasDanmakuControl());
         setButtonEnabled(binding.playerExternal, hasPlayer);
         setButtonEnabled(binding.playerEpisodes, selectedFlag != null && selectedFlag.getEpisodes() != null && !selectedFlag.getEpisodes().isEmpty());
         setButtonEnabled(binding.playerCast, hasPlayer && hasInlineCast());
@@ -2021,6 +2024,7 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
         binding.playerCast.setVisibility(hasInlineCast() ? View.VISIBLE : View.GONE);
         binding.playerInfo.setVisibility(hasInlineInfo() ? View.VISIBLE : View.GONE);
         binding.playerActionRow.setVisibility(inlineFullscreen ? View.VISIBLE : View.GONE);
+        binding.playerDanmakuToggle.setVisibility(hasPlayer && inlineControlController.hasDanmakuControl() ? View.VISIBLE : View.GONE);
         binding.playerQuality.setVisibility(currentInlineResult != null && currentInlineResult.getUrl().isMulti() ? View.VISIBLE : View.GONE);
         binding.playerParse.setVisibility(useParse && !VodConfig.get().getParses().isEmpty() ? View.VISIBLE : View.GONE);
         setInlineFullscreenIcon();
@@ -2176,6 +2180,11 @@ public class TmdbDetailActivity extends PlaybackActivity implements TrackDialog.
     private void showInlineDanmaku() {
         if (service() == null || player().isEmpty()) return;
         DanmakuDialog.create().player(player()).show(this);
+    }
+
+    private void toggleInlineDanmaku() {
+        if (inlineControlController == null) return;
+        inlineControlController.onDanmakuButton();
     }
 
     private void openInlineExternal() {

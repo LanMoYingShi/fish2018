@@ -320,11 +320,6 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
                 getFragment().onRefresh();
                 break;
             case HISTORY:
-                if (mWeb != null && mWeb.isVisible()) {
-                    mWeb.reload();
-                } else if (mBinding.pager.getCurrentItem() == 0) {
-                    homeContent();
-                }
                 break;
         }
     }
