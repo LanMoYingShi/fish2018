@@ -9,6 +9,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.fongmi.android.tv.bean.Episode;
 import com.fongmi.android.tv.databinding.AdapterEpisodeBinding;
+import com.fongmi.android.tv.ui.custom.EpisodeTitlePopup;
 import com.fongmi.android.tv.utils.ResUtil;
 
 import java.util.ArrayList;
@@ -35,11 +36,13 @@ public class EpisodeAdapter extends RecyclerView.Adapter<EpisodeAdapter.ViewHold
     public void addAll(List<Episode> items) {
         mItems.clear();
         mItems.addAll(items);
+        column = getColumn(items);
         notifyDataSetChanged();
     }
 
     public void clear() {
         mItems.clear();
+        column = 1;
         notifyDataSetChanged();
     }
 
@@ -111,12 +114,17 @@ public class EpisodeAdapter extends RecyclerView.Adapter<EpisodeAdapter.ViewHold
         int maxWidth = ResUtil.getScreenWidth() - ResUtil.dp2px(48);
         int spacing = ResUtil.dp2px(8);
         int padding = ResUtil.dp2px(40);
-        for (Episode item : items) maxTextWidth = Math.max(maxTextWidth, ResUtil.getTextWidth(item.getDesc().concat(item.getName()), 16) + padding);
+        if (items == null || items.isEmpty()) return 1;
+        for (Episode item : items) maxTextWidth = Math.max(maxTextWidth, ResUtil.getTextWidth(getTitle(item), 16) + padding);
         for (int candidate : new int[]{8, 6, 5, 4, 3, 2}) {
             int width = (maxWidth - spacing * (candidate - 1)) / candidate;
             if (maxTextWidth <= width) return candidate;
         }
         return 2;
+    }
+
+    public static String getTitle(Episode item) {
+        return item.getDesc().concat(item.getDisplayName());
     }
 
     private int getWidth() {
@@ -141,13 +149,19 @@ public class EpisodeAdapter extends RecyclerView.Adapter<EpisodeAdapter.ViewHold
         holder.binding.text.setNextFocusUpId(position < column && nextFocusUp != 0 ? nextFocusUp : View.NO_ID);
         holder.binding.text.setNextFocusDownId(position >= getItemCount() - column && nextFocusDown != 0 ? nextFocusDown : View.NO_ID);
         holder.binding.text.setSelected(item.isSelected());
-        holder.binding.text.setText(item.getDesc().concat(item.getDisplayName()));
-        holder.binding.getRoot().setOnClickListener(v -> mListener.onItemClick(item));
+        holder.binding.text.setText(getTitle(item));
+        holder.binding.getRoot().setOnClickListener(v -> {
+            EpisodeTitlePopup.dismiss();
+            mListener.onItemClick(item);
+        });
+        holder.binding.getRoot().setOnLongClickListener(v -> mListener.onItemLongClick(v, item));
     }
 
     public interface OnClickListener {
 
         void onItemClick(Episode item);
+
+        boolean onItemLongClick(View view, Episode item);
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {

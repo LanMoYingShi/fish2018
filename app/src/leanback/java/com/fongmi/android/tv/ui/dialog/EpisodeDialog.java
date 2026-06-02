@@ -1,5 +1,6 @@
 package com.fongmi.android.tv.ui.dialog;
 
+import android.content.DialogInterface;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -18,6 +19,8 @@ import com.fongmi.android.tv.bean.Episode;
 import com.fongmi.android.tv.databinding.AdapterEpisodeDialogBinding;
 import com.fongmi.android.tv.databinding.AdapterEpisodePageBinding;
 import com.fongmi.android.tv.databinding.DialogEpisodeBinding;
+import com.fongmi.android.tv.ui.adapter.EpisodeAdapter;
+import com.fongmi.android.tv.ui.custom.EpisodeTitlePopup;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
@@ -70,6 +73,12 @@ public class EpisodeDialog extends BaseAlertDialog {
     public void onStart() {
         super.onStart();
         setSize();
+    }
+
+    @Override
+    public void onDismiss(@NonNull DialogInterface dialog) {
+        EpisodeTitlePopup.dismiss();
+        super.onDismiss(dialog);
     }
 
     private void setSize() {
@@ -243,13 +252,15 @@ public class EpisodeDialog extends BaseAlertDialog {
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             Episode item = items.get(position);
-            holder.binding.text.setText(item.getDisplayName());
+            holder.binding.text.setText(EpisodeAdapter.getTitle(item));
             holder.binding.text.setSelected(item.isSelected());
             holder.binding.text.setNextFocusUpId(position < SPAN_COUNT ? R.id.page : View.NO_ID);
             holder.binding.getRoot().setOnClickListener(view -> {
-                ((com.fongmi.android.tv.ui.adapter.EpisodeAdapter.OnClickListener) requireActivity()).onItemClick(item);
+                EpisodeTitlePopup.dismiss();
+                ((EpisodeAdapter.OnClickListener) requireActivity()).onItemClick(item);
                 dismiss();
             });
+            holder.binding.getRoot().setOnLongClickListener(view -> EpisodeTitlePopup.show(view, EpisodeAdapter.getTitle(item)));
         }
 
         private final class ViewHolder extends RecyclerView.ViewHolder {

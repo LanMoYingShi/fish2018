@@ -67,6 +67,7 @@ import com.fongmi.android.tv.ui.adapter.QuickAdapter;
 import com.fongmi.android.tv.ui.custom.CustomKeyDownVod;
 import com.fongmi.android.tv.ui.custom.CustomMovement;
 import com.fongmi.android.tv.ui.custom.CustomSeekView;
+import com.fongmi.android.tv.ui.custom.EpisodeTitlePopup;
 import com.fongmi.android.tv.ui.dialog.ContentDialog;
 import com.fongmi.android.tv.ui.dialog.DanmakuDialog;
 import com.fongmi.android.tv.ui.dialog.EpisodeDialog;
@@ -651,6 +652,11 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.episode.setSelectedPosition(mEpisodeAdapter.getPosition());
         if (isFullscreen()) Notify.show(getString(R.string.play_ready, item.getName()));
         onRefresh();
+    }
+
+    @Override
+    public boolean onItemLongClick(View view, Episode item) {
+        return EpisodeTitlePopup.show(view, EpisodeAdapter.getTitle(item));
     }
 
     private void setQualityVisible(boolean visible) {
