@@ -92,6 +92,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     private Clock mClock;
     private boolean initialLoaded;
     private boolean homeHistoryVisible;
+    private boolean webToolbarVisible = true;
 
     private Site getHome() {
         return VodConfig.get().getHome();
@@ -140,10 +141,14 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         mBinding.recycler.addOnChildViewHolderSelectedListener(new OnChildViewHolderSelectedListener() {
             @Override
             public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
-                mBinding.toolbar.setVisibility(position == 0 ? View.VISIBLE : View.GONE);
+                updateToolbarVisibility(position == 0);
                 if (mPresenter.isDelete()) setHistoryDelete(false);
             }
         });
+    }
+
+    private void updateToolbarVisibility(boolean visible) {
+        mBinding.toolbar.setVisibility(visible && webToolbarVisible ? View.VISIBLE : View.GONE);
     }
 
     private void checkAction(Intent intent) {
@@ -269,6 +274,8 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
             return;
         }
         if (mWeb != null) mWeb.hide();
+        webToolbarVisible = true;
+        updateToolbarVisibility(true);
         mBinding.recycler.setVisibility(View.VISIBLE);
         mResult = Result.empty();
         int index = getRecommendIndex();
@@ -602,6 +609,8 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
 
     @Override
     public void onWebLoading() {
+        webToolbarVisible = true;
+        updateToolbarVisibility(true);
         mBinding.progressLayout.showProgress();
     }
 
@@ -613,9 +622,17 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
 
     @Override
     public void onWebError() {
+        webToolbarVisible = true;
+        updateToolbarVisibility(true);
         if (mWeb != null) mWeb.hide();
         mBinding.recycler.setVisibility(View.VISIBLE);
         getVideo(true);
+    }
+
+    @Override
+    public void setToolbar(boolean visible) {
+        webToolbarVisible = visible;
+        updateToolbarVisibility(visible);
     }
 
 }
