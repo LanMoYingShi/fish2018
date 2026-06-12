@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat;
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.BuildConfig;
 import com.fongmi.android.tv.bean.AudioConfig;
+import com.fongmi.android.tv.bean.ShortDramaConfig;
 import com.fongmi.android.tv.utils.WebViewUtil;
 import com.github.catvod.crawler.DebugLogStore;
 import com.github.catvod.crawler.SpiderDebug;
@@ -313,5 +314,17 @@ public class Setting {
 
     public static boolean isAudioSiteEnabled(String key, String name) {
         return AudioConfig.objectFrom(getAudioConfig()).isSiteEnabled(key, name);
+    }
+
+    public static String getShortDramaConfig() {
+        return Prefers.getString("short_drama_config");
+    }
+
+    public static void putShortDramaConfig(String value) {
+        Prefers.put("short_drama_config", value);
+    }
+
+    public static boolean isShortDramaSiteEnabled(String key, String name) {
+        return ShortDramaConfig.objectFrom(getShortDramaConfig()).isSiteEnabled(key, name);
     }
 }

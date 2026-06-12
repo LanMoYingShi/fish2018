@@ -285,6 +285,7 @@
     <string name="setting_incognito">Incognito mode</string>
     <string name="setting_drive_check">Drive link check</string>
     <string name="setting_audio_source">Audio source config</string>
+    <string name="setting_short_drama_source">Short drama source config</string>
     <string name="setting_theme_color">Theme color</string>
     <string name="setting_auto">Auto</string>
     <string name="setting_custom">Custom</string>
@@ -445,6 +446,9 @@
     <string name="dialog_audio_site_rules">Audio source rules: enabled sources or keywords, separated by ;. Default: [音];[听]</string>
     <string name="dialog_audio_site_manage">Select audio sources</string>
     <string name="dialog_audio_site_default">Default [音]/[听]</string>
+    <string name="dialog_short_drama_site_rules">Short drama source rules: enabled sources or keywords, separated by ;. Default: [短];短剧</string>
+    <string name="dialog_short_drama_site_manage">Select short drama sources</string>
+    <string name="dialog_short_drama_site_default">Default [短]/短剧</string>
 
     <string name="dialog_reset">Reset</string>
     <string name="dialog_select_title">Select chapter</string>
