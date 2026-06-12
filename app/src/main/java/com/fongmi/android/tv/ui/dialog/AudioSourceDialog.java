@@ -46,7 +46,7 @@ public class AudioSourceDialog {
         View manageBtn = view.findViewById(R.id.manage);
 
         AudioConfig config = AudioConfig.objectFrom(Setting.getAudioConfig());
-        rulesEdit.setText(config.getDisplayRules());
+        rulesEdit.setText(toDisplayText(config.getEnabledSites()));
         manageBtn.setOnClickListener(v -> showSiteManage());
 
         dialog = new MaterialAlertDialogBuilder(activity)
@@ -61,7 +61,7 @@ public class AudioSourceDialog {
     }
 
     private void onSave(DialogInterface d, int which) {
-        List<String> rules = splitRules(rulesEdit.getText().toString());
+        List<String> rules = extractKeys(rulesEdit.getText().toString());
         String json = "{\"configured\":true,\"enabledSites\":" + toJsonArray(rules) + "}";
         Setting.putAudioConfig(AudioConfig.objectFrom(json).toJson());
     }
@@ -86,7 +86,11 @@ public class AudioSourceDialog {
                 .setPositiveButton(R.string.dialog_positive, (d, w) -> {
                     List<String> selected = new ArrayList<>();
                     for (int i = 0; i < sites.size(); i++)
-                        if (checked[i]) selected.add(sites.get(i).getKey());
+                        if (checked[i]) selected.add(displayName(sites.get(i)));
+                    // 合并已有的关键词规则（非站点条目）
+                    for (String rule : splitRules(rulesEdit.getText().toString())) {
+                        if (findSite(rule) == null && !selected.contains(rule)) selected.add(rule);
+                    }
                     rulesEdit.setText(String.join(";", selected));
                 })
                 .setNegativeButton(R.string.dialog_negative, null)
@@ -99,9 +103,47 @@ public class AudioSourceDialog {
         for (String rule : rules) {
             if (TextUtils.isEmpty(rule)) continue;
             String r = rule.trim().toLowerCase(Locale.ROOT);
-            if (key.contains(r) || name.contains(r) || r.contains(key)) return true;
+            if (key.equals(r) || name.equals(r)) return true;
         }
         return false;
+    }
+
+    // 显示文本：站点 key 转为站点名称，关键词原样保留
+    private String toDisplayText(List<String> rules) {
+        if (rules == null || rules.isEmpty()) return "";
+        List<String> display = new ArrayList<>();
+        for (String rule : rules) {
+            Site site = findSite(rule);
+            display.add(site != null ? displayName(site) : rule);
+        }
+        return String.join(";", display);
+    }
+
+    // 保存时：站点名称转回 key，关键词原样保留
+    private List<String> extractKeys(String text) {
+        List<String> result = new ArrayList<>();
+        for (String rule : splitRules(text)) {
+            Site site = findSite(rule);
+            String value = site != null ? site.getKey() : rule;
+            if (!result.contains(value)) result.add(value);
+        }
+        return result;
+    }
+
+    // 按 key 或名称精确查找站点
+    private Site findSite(String value) {
+        if (TextUtils.isEmpty(value)) return null;
+        String target = value.trim();
+        for (Site site : VodConfig.get().getSites()) {
+            if (site == null || site.isEmpty()) continue;
+            if (target.equalsIgnoreCase(site.getKey())) return site;
+            if (!TextUtils.isEmpty(site.getName()) && target.equalsIgnoreCase(site.getName())) return site;
+        }
+        return null;
+    }
+
+    private String displayName(Site site) {
+        return TextUtils.isEmpty(site.getName()) ? site.getKey() : site.getName();
     }
 
     private List<String> splitRules(String text) {

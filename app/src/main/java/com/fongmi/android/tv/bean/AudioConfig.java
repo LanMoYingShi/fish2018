@@ -3,6 +3,7 @@ package com.fongmi.android.tv.bean;
 import android.text.TextUtils;
 
 import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.api.config.VodConfig;
 import com.google.gson.annotations.SerializedName;
 
 import java.util.ArrayList;
@@ -52,6 +53,17 @@ public class AudioConfig {
         return rules.isEmpty() ? "" : String.join(";", rules);
     }
 
+    public String getDisplayRulesWithNames() {
+        List<String> rules = isConfigured() ? getEnabledSites() : DEFAULT_ENABLED_RULES;
+        if (rules.isEmpty()) return "";
+        List<String> display = new ArrayList<>();
+        for (String rule : rules) {
+            Site site = findSite(rule);
+            display.add(site != null ? getSiteName(site) : rule);
+        }
+        return String.join(";", display);
+    }
+
     public String toJson() {
         configured = true;
         return App.gson().toJson(sanitize());
@@ -80,5 +92,19 @@ public class AudioConfig {
             if (target.contains(rule.trim().toLowerCase(Locale.ROOT))) return true;
         }
         return false;
+    }
+
+    private static Site findSite(String value) {
+        if (TextUtils.isEmpty(value)) return null;
+        String target = value.trim();
+        for (Site site : VodConfig.get().getSites()) {
+            if (site == null || site.isEmpty()) continue;
+            if (target.equalsIgnoreCase(site.getKey())) return site;
+        }
+        return null;
+    }
+
+    private static String getSiteName(Site site) {
+        return TextUtils.isEmpty(site.getName()) ? site.getKey() : site.getName();
     }
 }
