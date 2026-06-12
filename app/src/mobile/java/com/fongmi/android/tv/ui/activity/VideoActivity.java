@@ -1596,13 +1596,9 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void setShortDramaScale() {
-        if (mHistory == null) {
-            setScale(SHORT_DRAMA_SCALE);
-        } else if (mHistory.getScale() == -1) {
-            setScale(SHORT_DRAMA_SCALE);
-        } else {
-            setScale(getScale());
-        }
+        int scale = (mHistory != null && mHistory.getScale() != -1) ? getScale() : SHORT_DRAMA_SCALE;
+        mBinding.exo.setResizeMode(scale);
+        mBinding.control.action.scale.setText(ResUtil.getStringArray(R.array.select_scale)[scale]);
     }
 
     private void finishShortDrama() {
