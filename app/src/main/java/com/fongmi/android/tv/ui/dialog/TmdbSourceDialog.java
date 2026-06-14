@@ -5,57 +5,83 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.FragmentActivity;
 
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.config.VodConfig;
-import com.fongmi.android.tv.bean.AudioConfig;
 import com.fongmi.android.tv.bean.Site;
+import com.fongmi.android.tv.bean.TmdbConfig;
 import com.fongmi.android.tv.setting.Setting;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.materialswitch.MaterialSwitch;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class AudioSourceDialog {
+/**
+ * TMDB 元数据增强配置弹窗。
+ *
+ * 仿照 {@link ShortDramaSourceDialog} 的交互：
+ * - 配置 TMDB API Key（或 v4 Access Token）
+ * - 全局启用 / 关闭 TMDB 增强
+ * - 通过 Chip 标签维护启用站点规则与排除站点黑名单
+ * 点"确定"才统一保存。
+ */
+public class TmdbSourceDialog {
 
     private final FragmentActivity activity;
     private AlertDialog dialog;
     private ChipGroup enabledChips;
+    private ChipGroup disabledChips;
+    private TextView disabledLabel;
+    private EditText apiKeyInput;
+    private EditText omdbApiKeyInput;
+    private MaterialSwitch enableSwitch;
     private Runnable onDismiss;
 
     // 暂存数据，点"确定"才保存
     private List<String> tempEnabledRules;
+    private List<String> tempDisabledSites;
 
-    public static AudioSourceDialog create(FragmentActivity activity) {
-        return new AudioSourceDialog(activity);
+    public static TmdbSourceDialog create(FragmentActivity activity) {
+        return new TmdbSourceDialog(activity);
     }
 
-    private AudioSourceDialog(FragmentActivity activity) {
+    private TmdbSourceDialog(FragmentActivity activity) {
         this.activity = activity;
     }
 
-    public AudioSourceDialog onDismiss(Runnable callback) {
+    public TmdbSourceDialog onDismiss(Runnable callback) {
         this.onDismiss = callback;
         return this;
     }
 
     public void show() {
-        View view = LayoutInflater.from(activity).inflate(R.layout.dialog_audio_source, null);
+        View view = LayoutInflater.from(activity).inflate(R.layout.dialog_tmdb_source, null);
         enabledChips = view.findViewById(R.id.enabledChips);
+        disabledChips = view.findViewById(R.id.disabledChips);
+        disabledLabel = view.findViewById(R.id.disabledLabel);
+        apiKeyInput = view.findViewById(R.id.apiKeyInput);
+        omdbApiKeyInput = view.findViewById(R.id.omdbApiKeyInput);
+        enableSwitch = view.findViewById(R.id.enableSwitch);
         EditText ruleInput = view.findViewById(R.id.ruleInput);
         View addBtn = view.findViewById(R.id.add);
         View manageBtn = view.findViewById(R.id.manage);
         View resetBtn = view.findViewById(R.id.resetDefault);
 
         // 初始化暂存数据
-        AudioConfig config = AudioConfig.objectFrom(Setting.getAudioConfig());
+        TmdbConfig config = TmdbConfig.objectFrom(Setting.getTmdbConfig());
         tempEnabledRules = new ArrayList<>(config.getEnabledSites());
+        tempDisabledSites = new ArrayList<>(config.getDisabledSites());
+        apiKeyInput.setText(TextUtils.isEmpty(config.getAccessToken()) ? config.getApiKey() : config.getAccessToken());
+        omdbApiKeyInput.setText(config.getOmdbApiKey());
+        enableSwitch.setChecked(Setting.isTmdbEnabled());
         updateChipsDisplay();
 
         addBtn.setOnClickListener(v -> addRule(ruleInput));
@@ -70,7 +96,7 @@ public class AudioSourceDialog {
         resetBtn.setOnClickListener(v -> resetToDefault());
 
         dialog = new MaterialAlertDialogBuilder(activity)
-                .setTitle(R.string.setting_audio_source)
+                .setTitle(R.string.setting_tmdb_source)
                 .setView(view)
                 .setPositiveButton(R.string.dialog_positive, (d, w) -> onSave())
                 .setNegativeButton(R.string.dialog_negative, null)
@@ -80,17 +106,30 @@ public class AudioSourceDialog {
     }
 
     private void onSave() {
-        String json = "{\"configured\":true,\"enabledSites\":" + toJsonArray(tempEnabledRules) + "}";
-        Setting.putAudioConfig(AudioConfig.objectFrom(json).toJson());
+        String apiKey = apiKeyInput.getText().toString().trim();
+        String omdbApiKey = omdbApiKeyInput.getText().toString().trim();
+        // v4 Access Token 含两个点，按 token 存；否则按 api_key 存
+        boolean isToken = apiKey.split("\\.").length >= 3;
+        StringBuilder sb = new StringBuilder("{");
+        if (isToken) sb.append("\"accessToken\":\"").append(escape(apiKey)).append("\",");
+        else sb.append("\"apiKey\":\"").append(escape(apiKey)).append("\",");
+        if (!TextUtils.isEmpty(omdbApiKey)) {
+            sb.append("\"omdbApiKey\":\"").append(escape(omdbApiKey)).append("\",");
+        }
+        sb.append("\"enabledSites\":").append(toJsonArray(tempEnabledRules)).append(',');
+        sb.append("\"disabledSites\":").append(toJsonArray(tempDisabledSites));
+        sb.append('}');
+        Setting.putTmdbConfig(TmdbConfig.objectFrom(sb.toString()).toJson());
+        Setting.putTmdbEnabled(enableSwitch.isChecked());
     }
 
     private void showSiteManage() {
         List<Site> sites = VodConfig.get().getSites().stream().filter(s -> s != null && !s.isEmpty()).toList();
         if (sites.isEmpty()) return;
 
-        List<String> enabledRules = tempEnabledRules.isEmpty()
-            ? List.of(AudioConfig.defaultRulesText().split(";"))
-            : new ArrayList<>(tempEnabledRules);
+        List<String> enabledRules = new ArrayList<>(tempEnabledRules);
+        List<String> disabledSites = new ArrayList<>(tempDisabledSites);
+        boolean enableAll = enabledRules.isEmpty();
 
         String[] labels = new String[sites.size()];
         boolean[] checked = new boolean[sites.size()];
@@ -98,18 +137,20 @@ public class AudioSourceDialog {
         for (int i = 0; i < sites.size(); i++) {
             Site site = sites.get(i);
             labels[i] = TextUtils.isEmpty(site.getName()) ? site.getKey() : site.getName() + "  " + site.getKey();
-            checked[i] = matchesRule(enabledRules, site);
+            boolean inBlacklist = disabledSites.contains(site.getKey());
+            boolean matchedByRule = enableAll || matchesRule(enabledRules, site);
+            checked[i] = matchedByRule && !inBlacklist;
         }
 
         new MaterialAlertDialogBuilder(activity)
-                .setTitle(R.string.dialog_audio_site_manage)
+                .setTitle(R.string.dialog_tmdb_site_manage)
                 .setMultiChoiceItems(labels, checked, (d, which, isChecked) -> checked[which] = isChecked)
-                .setPositiveButton(R.string.dialog_positive, (d, w) -> applySiteManage(sites, enabledRules, checked))
+                .setPositiveButton(R.string.dialog_positive, (d, w) -> applySiteManage(sites, enabledRules, disabledSites, checked, enableAll))
                 .setNegativeButton(R.string.dialog_negative, null)
                 .show();
     }
 
-    private void applySiteManage(List<Site> sites, List<String> enabledRules, boolean[] checked) {
+    private void applySiteManage(List<Site> sites, List<String> enabledRules, List<String> disabledSites, boolean[] checked, boolean enableAll) {
         List<String> newEnabled = new ArrayList<>();
         // 保留关键词（非站点条目）
         for (String rule : enabledRules) {
@@ -117,13 +158,11 @@ public class AudioSourceDialog {
         }
 
         for (int i = 0; i < sites.size(); i++) {
-            if (!checked[i]) continue;
-
             Site site = sites.get(i);
             String key = site.getKey();
+            boolean nowChecked = checked[i];
             boolean matchedByKeyword = false;
 
-            // 检查是否被关键词匹配
             for (String rule : enabledRules) {
                 if (findSite(rule) == null && matchesRule(List.of(rule), site)) {
                     matchedByKeyword = true;
@@ -131,14 +170,21 @@ public class AudioSourceDialog {
                 }
             }
 
-            // 只有不被关键词匹配的，才显式加入
-            if (!matchedByKeyword && !newEnabled.contains(key)) {
-                newEnabled.add(key);
+            if (nowChecked) {
+                disabledSites.remove(key);
+                // enableAll 模式下默认全部启用，仅当显式取消才需要黑名单；勾选状态无需加入
+                if (!enableAll && !matchedByKeyword && !newEnabled.contains(key)) {
+                    newEnabled.add(key);
+                }
+            } else {
+                if ((enableAll || matchedByKeyword) && !disabledSites.contains(key)) {
+                    disabledSites.add(key);
+                }
             }
         }
 
-        // 更新暂存数据
         tempEnabledRules = newEnabled;
+        tempDisabledSites = disabledSites;
         updateChipsDisplay();
     }
 
@@ -174,42 +220,77 @@ public class AudioSourceDialog {
         StringBuilder sb = new StringBuilder("[");
         for (int i = 0; i < values.size(); i++) {
             if (i > 0) sb.append(',');
-            sb.append('"').append(values.get(i).replace("\"", "\\\"")).append('"');
+            sb.append('"').append(escape(values.get(i))).append('"');
         }
         return sb.append(']').toString();
     }
 
+    private String escape(String value) {
+        return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    // Chip 相关
     private void updateChipsDisplay() {
         enabledChips.removeAllViews();
+        disabledChips.removeAllViews();
 
-        List<String> enabledRules = tempEnabledRules.isEmpty()
-            ? List.of(AudioConfig.defaultRulesText().split(";"))
-            : tempEnabledRules;
-
-        for (String rule : enabledRules) {
-            if (TextUtils.isEmpty(rule)) continue;
-            Chip chip = createChip(rule.trim());
+        if (tempEnabledRules.isEmpty()) {
+            // 空规则代表"全部站点启用"，用一个提示 Chip 表示
+            Chip chip = new Chip(activity);
+            chip.setText(R.string.dialog_tmdb_all_sites);
+            chip.setCheckable(false);
+            chip.setCloseIconVisible(false);
             enabledChips.addView(chip);
+        } else {
+            for (String rule : tempEnabledRules) {
+                if (TextUtils.isEmpty(rule)) continue;
+                enabledChips.addView(createChip(rule.trim(), false));
+            }
+        }
+
+        if (tempDisabledSites.isEmpty()) {
+            disabledLabel.setVisibility(View.GONE);
+            disabledChips.setVisibility(View.GONE);
+        } else {
+            disabledLabel.setVisibility(View.VISIBLE);
+            disabledChips.setVisibility(View.VISIBLE);
+            for (String key : tempDisabledSites) {
+                Site site = findSite(key);
+                String name = site != null ? displayName(site) : key;
+                Chip chip = createChip(name, true);
+                chip.setTag(key);
+                disabledChips.addView(chip);
+            }
         }
     }
 
-    private Chip createChip(String text) {
+    private Chip createChip(String text, boolean isDisabled) {
         Chip chip = new Chip(activity);
-
-        // 启用规则：key 转站点名显示，关键词原样
-        Site site = findSite(text);
+        Site site = isDisabled ? null : findSite(text);
         chip.setText(site != null ? displayName(site) : text);
-
         chip.setCloseIconVisible(true);
         chip.setCheckable(false);
 
-        chip.setOnCloseIconClickListener(v -> removeEnabledRule(text));
+        if (isDisabled) {
+            chip.setChipBackgroundColorResource(android.R.color.transparent);
+            chip.setChipStrokeColorResource(android.R.color.holo_red_light);
+            chip.setChipStrokeWidth(2f);
+        }
+
+        chip.setOnCloseIconClickListener(v -> {
+            if (isDisabled) removeFromBlacklist((String) chip.getTag());
+            else removeEnabledRule(text);
+        });
 
         return chip;
     }
 
+    private void removeFromBlacklist(String key) {
+        tempDisabledSites.remove(key);
+        updateChipsDisplay();
+    }
+
     private void removeEnabledRule(String rule) {
-        // 尝试按显示名和 key 移除
         Site site = findSite(rule);
         if (site != null) {
             tempEnabledRules.remove(site.getKey());
@@ -222,21 +303,19 @@ public class AudioSourceDialog {
 
     private void resetToDefault() {
         tempEnabledRules.clear();
+        tempDisabledSites.clear();
         updateChipsDisplay();
     }
 
     private void addRule(EditText input) {
         String rule = input.getText().toString().trim();
         if (TextUtils.isEmpty(rule)) return;
-
-        // 去重：站点 key/名称 或关键词已存在则不重复添加
         Site site = findSite(rule);
         String toAdd = site != null ? site.getKey() : rule;
         if (tempEnabledRules.contains(toAdd)) {
             input.setText("");
             return;
         }
-
         tempEnabledRules.add(toAdd);
         input.setText("");
         updateChipsDisplay();

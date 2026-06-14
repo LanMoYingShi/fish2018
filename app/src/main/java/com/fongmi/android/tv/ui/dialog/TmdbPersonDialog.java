@@ -1,0 +1,507 @@
+package com.fongmi.android.tv.ui.dialog;
+
+import android.app.Activity;
+import android.app.Dialog;
+import android.text.TextUtils;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.bumptech.glide.Glide;
+import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.api.SiteApi;
+import com.fongmi.android.tv.api.config.VodConfig;
+import com.fongmi.android.tv.bean.Result;
+import com.fongmi.android.tv.bean.Site;
+import com.fongmi.android.tv.bean.TmdbConfig;
+import com.fongmi.android.tv.bean.TmdbItem;
+import com.fongmi.android.tv.bean.TmdbPerson;
+import com.fongmi.android.tv.bean.Vod;
+import com.fongmi.android.tv.service.TmdbService;
+import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.ui.activity.VideoActivity;
+import com.fongmi.android.tv.ui.activity.SearchActivity;
+import com.fongmi.android.tv.ui.adapter.TmdbPersonPhotoAdapter;
+import com.fongmi.android.tv.ui.adapter.TmdbPersonWorkAdapter;
+import com.fongmi.android.tv.utils.Notify;
+import com.fongmi.android.tv.utils.Task;
+import com.fongmi.android.tv.utils.TmdbImageSaver;
+import com.google.android.material.chip.Chip;
+import com.google.android.material.chip.ChipGroup;
+import com.google.gson.JsonObject;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+/**
+ * TMDB 人物详情全屏弹窗。
+ */
+public class TmdbPersonDialog {
+
+    private final Activity activity;
+    private final TmdbPerson person;
+    private final TmdbService tmdbService;
+    private final TmdbConfig tmdbConfig;
+
+    private Dialog dialog;
+    private TextView biography;
+    private TextView stats;
+    private LinearLayout biographySection;
+    private LinearLayout photosSection;
+    private LinearLayout filterSection;
+    private RecyclerView photosRecycler;
+    private RecyclerView worksRecycler;
+    private ChipGroup filterChips;
+
+    private TmdbPersonPhotoAdapter photoAdapter;
+    private TmdbPersonWorkAdapter workAdapter;
+
+    private List<TmdbItem> allWorks = new ArrayList<>();
+    private Map<String, List<TmdbItem>> worksByCategory = new HashMap<>();
+    private String currentFilter = "all";
+    private List<String> personPhotos = new ArrayList<>();
+
+    public static void show(Activity activity, TmdbPerson person) {
+        new TmdbPersonDialog(activity, person).show();
+    }
+
+    private TmdbPersonDialog(Activity activity, TmdbPerson person) {
+        this.activity = activity;
+        this.person = person;
+        this.tmdbService = new TmdbService();
+        this.tmdbConfig = TmdbConfig.objectFrom(Setting.getTmdbConfig());
+    }
+
+    private void show() {
+        dialog = new Dialog(activity, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        View view = LayoutInflater.from(activity).inflate(R.layout.dialog_tmdb_person, null);
+        dialog.setContentView(view);
+
+        // 全屏设置
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
+            window.setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        initView(view);
+        loadPersonDetail();
+        dialog.show();
+    }
+
+    private void initView(View view) {
+        ImageView profile = view.findViewById(R.id.profile);
+        TextView name = view.findViewById(R.id.name);
+        TextView role = view.findViewById(R.id.role);
+        biography = view.findViewById(R.id.biography);
+        stats = view.findViewById(R.id.stats);
+        biographySection = view.findViewById(R.id.biographySection);
+        photosSection = view.findViewById(R.id.photosSection);
+        filterSection = view.findViewById(R.id.filterSection);
+        photosRecycler = view.findViewById(R.id.photosRecycler);
+        worksRecycler = view.findViewById(R.id.worksRecycler);
+        filterChips = view.findViewById(R.id.filterChips);
+        View closeBtn = view.findViewById(R.id.closeBtn);
+
+        name.setText(person.getName());
+        role.setText(person.getSubtitle());
+
+        // 头像（优化加载）
+        String profileUrl = person.getProfileUrl();
+        if (profileUrl != null && !profileUrl.isEmpty()) {
+            Glide.with(activity)
+                    .load(profileUrl)
+                    .override(200, 300)
+                    .dontAnimate()
+                    .into(profile);
+        }
+
+        // 设置照片列表（带点击事件）
+        photoAdapter = new TmdbPersonPhotoAdapter(this::onPhotoClick);
+        photosRecycler.setLayoutManager(new LinearLayoutManager(activity, LinearLayoutManager.HORIZONTAL, false));
+        photosRecycler.setAdapter(photoAdapter);
+
+        // 设置作品列表（一行一个，垂直滚动，优化性能）
+        workAdapter = new TmdbPersonWorkAdapter(this::onWorkClick);
+        LinearLayoutManager layoutManager = new LinearLayoutManager(activity);
+        worksRecycler.setLayoutManager(layoutManager);
+        worksRecycler.setAdapter(workAdapter);
+        worksRecycler.setRecycledViewPool(new RecyclerView.RecycledViewPool());
+        worksRecycler.setItemViewCacheSize(10);  // 增加缓存
+        worksRecycler.setDrawingCacheEnabled(true);
+        worksRecycler.setDrawingCacheQuality(View.DRAWING_CACHE_QUALITY_HIGH);
+
+        // 关闭按钮
+        closeBtn.setOnClickListener(v -> dialog.dismiss());
+    }
+
+    /**
+     * 设置简介文本（含展开/收起）。
+     */
+    private void setBiography(String bio) {
+        if (biography == null || bio == null || bio.isEmpty()) return;
+        activity.runOnUiThread(() -> {
+            if (dialog != null && dialog.isShowing()) {
+                biography.setText(bio);
+                biography.setOnClickListener(v -> {
+                    int currentMaxLines = biography.getMaxLines();
+                    biography.setMaxLines(currentMaxLines == 8 ? Integer.MAX_VALUE : 8);
+                });
+                biographySection.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    /**
+     * 设置照片列表。
+     */
+    private void setPhotos(List<String> photos) {
+        if (photos == null || photos.isEmpty()) return;
+        personPhotos = photos;
+        activity.runOnUiThread(() -> {
+            if (dialog != null && dialog.isShowing()) {
+                photoAdapter.setItems(photos);
+                photosSection.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    /**
+     * 设置作品列表和筛选器。
+     */
+    private void setWorks(List<TmdbItem> castWorks, List<TmdbItem> crewWorks) {
+        if ((castWorks == null || castWorks.isEmpty()) && (crewWorks == null || crewWorks.isEmpty())) return;
+
+        allWorks.clear();
+        worksByCategory.clear();
+
+        // 分类：全部、演员、电影、剧集
+        List<TmdbItem> all = new ArrayList<>();
+        List<TmdbItem> cast = new ArrayList<>();
+        List<TmdbItem> movies = new ArrayList<>();
+        List<TmdbItem> tvs = new ArrayList<>();
+
+        if (castWorks != null) {
+            all.addAll(castWorks);
+            cast.addAll(castWorks);
+            for (TmdbItem item : castWorks) {
+                if (item.isTv()) tvs.add(item);
+                else movies.add(item);
+            }
+        }
+
+        if (crewWorks != null) {
+            all.addAll(crewWorks);
+        }
+
+        allWorks = all;
+        worksByCategory.put("all", all);
+        worksByCategory.put("cast", cast);
+        worksByCategory.put("movies", movies);
+        worksByCategory.put("tvs", tvs);
+
+        // 计算统计信息
+        double totalRating = 0;
+        int ratedCount = 0;
+        for (TmdbItem item : cast) {
+            if (item.getRating() > 0) {
+                totalRating += item.getRating();
+                ratedCount++;
+            }
+        }
+        final double avgRating = ratedCount > 0 ? totalRating / ratedCount : 0;
+        final int workCount = cast.size();
+
+        activity.runOnUiThread(() -> {
+            if (dialog == null || !dialog.isShowing()) return;
+
+            // 显示统计
+            if (workCount > 0) {
+                String statsText = String.format(Locale.getDefault(),
+                    "参演 %d 部作品" + (avgRating > 0 ? " · 平均 %.1f 分" : ""),
+                    workCount, avgRating);
+                stats.setText(statsText);
+                stats.setVisibility(View.VISIBLE);
+            }
+
+            // 设置筛选器
+            setupFilters();
+
+            // 显示作品
+            filterWorks(currentFilter);
+        });
+    }
+
+    /**
+     * 设置筛选标签。
+     */
+    private void setupFilters() {
+        filterChips.removeAllViews();
+
+        String[] filters = {"all", "cast", "movies", "tvs"};
+        String[] labels = {"全部", "演员", "电影", "剧集"};
+
+        for (int i = 0; i < filters.length; i++) {
+            String filter = filters[i];
+            String label = labels[i];
+            List<TmdbItem> items = worksByCategory.get(filter);
+            if (items == null || items.isEmpty()) continue;
+
+            Chip chip = new Chip(activity);
+            chip.setText(String.format("%s (%d)", label, items.size()));
+            chip.setCheckable(true);
+            chip.setChecked(filter.equals(currentFilter));
+            chip.setOnClickListener(v -> filterWorks(filter));
+            filterChips.addView(chip);
+        }
+
+        filterSection.setVisibility(View.VISIBLE);
+    }
+
+    /**
+     * 根据筛选条件显示作品（显示全部，但优化加载）。
+     */
+    private void filterWorks(String filter) {
+        currentFilter = filter;
+        List<TmdbItem> items = worksByCategory.get(filter);
+        if (items != null) {
+            workAdapter.setItems(items);
+            worksRecycler.setVisibility(View.VISIBLE);
+        }
+    }
+
+    /**
+     * 异步加载人物详情，补充简介、照片和作品列表。
+     */
+    private void loadPersonDetail() {
+        int personId = person.getPersonId();
+        if (personId <= 0 || !tmdbConfig.isReady()) return;
+
+        Task.execute(() -> {
+            try {
+                JsonObject detail = tmdbService.person(personId, tmdbConfig);
+
+                // 简介
+                TmdbPerson full = tmdbService.personProfile(detail, tmdbConfig);
+                String bio = full.getBiography();
+                if (bio != null && !bio.isEmpty()) {
+                    setBiography(bio);
+                }
+
+                // 照片
+                List<String> photos = tmdbService.personPhotos(detail, tmdbConfig);
+                if (photos != null && !photos.isEmpty()) {
+                    setPhotos(photos);
+                }
+
+                // 作品
+                List<TmdbItem> castWorks = tmdbService.personCastWorks(detail, tmdbConfig);
+                List<TmdbItem> crewWorks = tmdbService.personCrewWorks(detail, tmdbConfig);
+                setWorks(castWorks, crewWorks);
+
+            } catch (Exception e) {
+                android.util.Log.w("TmdbPersonDialog", "加载人物详情失败: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * 照片点击 - 全屏查看 + 保存 + 左右滑动。
+     */
+    private void onPhotoClick(int position, String url) {
+        if (personPhotos.isEmpty()) return;
+        PhotoViewerDialog.show(activity, personPhotos, position, this::savePhoto);
+    }
+
+    /**
+     * 作品点击 - 优先本站搜索，搜不到再全局搜索，同时获取 TMDB 剧集信息。
+     */
+    private void onWorkClick(TmdbItem item) {
+        Site site = VodConfig.get().getHome();
+        if (site == null || site.isEmpty() || !site.isSearchable()) {
+            SearchActivity.start(activity, item.getTitle());
+            dismissDelayed();
+            return;
+        }
+        Notify.show(activity.getString(R.string.detail_work_searching, item.getTitle()));
+        Task.execute(() -> {
+            Vod match = searchCurrentSite(item.getTitle(), site);
+            ArrayList<String> episodeTitles = fetchEpisodeTitles(item);
+            activity.runOnUiThread(() -> {
+                if (match == null) {
+                    Notify.show(activity.getString(R.string.detail_work_global_searching, item.getTitle()));
+                    SearchActivity.start(activity, item.getTitle());
+                    dismissDelayed();
+                    return;
+                }
+                startVideoActivityWithEpisodes(site.getKey(), match.getId(), match.getName(), episodeTitles);
+                dismissDelayed();
+            });
+        });
+    }
+
+    /**
+     * 获取 TMDB 剧集标题列表（仅针对电视剧）。
+     */
+    private ArrayList<String> fetchEpisodeTitles(TmdbItem item) {
+        ArrayList<String> titles = new ArrayList<>();
+        if (item == null || !item.isTv()) return titles;
+        try {
+            com.fongmi.android.tv.service.TmdbService service = new com.fongmi.android.tv.service.TmdbService();
+            com.fongmi.android.tv.bean.TmdbConfig config = com.fongmi.android.tv.bean.TmdbConfig.objectFrom(com.fongmi.android.tv.setting.Setting.getTmdbConfig());
+            if (config == null || !config.isReady()) return titles;
+
+            // 尝试获取第1季（默认）
+            com.google.gson.JsonObject season = null;
+            try {
+                season = service.season(item, 1, config);
+            } catch (Exception ignored) {
+            }
+
+            // 第1季失败，尝试第0季（特别篇）
+            if (season == null) {
+                try {
+                    season = service.season(item, 0, config);
+                } catch (Exception ignored) {
+                }
+            }
+
+            if (season == null) return titles;
+
+            List<com.fongmi.android.tv.bean.TmdbEpisode> episodes = service.episodes(season, config);
+            for (com.fongmi.android.tv.bean.TmdbEpisode ep : episodes) {
+                if (!ep.getTitle().isEmpty()) {
+                    titles.add(ep.getNumber() + "\t" + ep.getTitle());
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.w("TmdbPersonDialog", "获取剧集信息失败: " + e.getMessage());
+        }
+        return titles;
+    }
+
+    /**
+     * 启动 VideoActivity 并传递集数信息。
+     */
+    private void startVideoActivityWithEpisodes(String key, String id, String name, ArrayList<String> episodeTitles) {
+        android.content.Intent intent = new android.content.Intent(activity, VideoActivity.class);
+        intent.putExtra("key", key);
+        intent.putExtra("id", id);
+        intent.putExtra("name", name);
+        if (episodeTitles != null && !episodeTitles.isEmpty()) {
+            intent.putStringArrayListExtra("tmdb_episode_titles", episodeTitles);
+        }
+        activity.startActivity(intent);
+    }
+
+    /**
+     * 延迟关闭对话框，让新页面先渲染。
+     */
+    private void dismissDelayed() {
+        if (dialog != null && dialog.isShowing()) {
+            dialog.getWindow().getDecorView().postDelayed(() -> {
+                if (dialog != null && dialog.isShowing()) {
+                    dialog.dismiss();
+                }
+            }, 300);  // 300ms 延迟
+        }
+    }
+
+    /**
+     * 在当前站源搜索作品。
+     */
+    private Vod searchCurrentSite(String keyword, Site site) {
+        try {
+            Result result = SiteApi.searchContent(site, keyword, false, "1");
+            return bestVod(result != null ? result.getList() : new ArrayList<>(), keyword);
+        } catch (Throwable e) {
+            return null;
+        }
+    }
+
+    /**
+     * 从搜索结果中找最佳匹配。
+     */
+    private Vod bestVod(List<Vod> items, String keyword) {
+        if (items == null || items.isEmpty()) return null;
+        Vod best = null;
+        int score = Integer.MIN_VALUE;
+        for (Vod item : items) {
+            int current = scoreVod(item, keyword);
+            if (current > score) {
+                score = current;
+                best = item;
+            }
+        }
+        return score > 0 ? best : null;
+    }
+
+    /**
+     * 作品匹配评分。
+     */
+    private int scoreVod(Vod item, String keyword) {
+        if (item == null) return Integer.MIN_VALUE;
+        String normalizedKeyword = normalizeTitle(keyword);
+        String name = normalizeTitle(item.getName());
+        if (name.isEmpty()) return Integer.MIN_VALUE;
+        if (name.equals(normalizedKeyword)) return 300;
+        if (name.contains(normalizedKeyword) || normalizedKeyword.contains(name)) return 220;
+        String remarks = normalizeTitle(item.getRemarks());
+        if (!remarks.isEmpty() && (remarks.contains(normalizedKeyword) || normalizedKeyword.contains(remarks))) return 120;
+        return 0;
+    }
+
+    /**
+     * 标题标准化（去除空格、标点）。
+     */
+    private String normalizeTitle(String text) {
+        return TextUtils.isEmpty(text) ? "" : text.replaceAll("[\\s·•・._\\-/\\\\|()（）\\[\\]【】《》<>]+", "").trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * 保存照片。
+     */
+    private void savePhoto(String url) {
+        if (TextUtils.isEmpty(url)) return;
+        if (!(activity instanceof androidx.fragment.app.FragmentActivity)) {
+            Notify.show(R.string.detail_image_save_failed);
+            return;
+        }
+        Notify.show(R.string.detail_image_saving);
+        TmdbImageSaver.save((androidx.fragment.app.FragmentActivity) activity, highResTmdbImage(url), new TmdbImageSaver.Callback() {
+            @Override
+            public void success(String name) {
+                Notify.show(activity.getString(R.string.detail_image_save_success, name));
+            }
+
+            @Override
+            public void error(String message) {
+                String prefix = activity.getString(R.string.detail_image_save_failed);
+                Notify.show(TextUtils.isEmpty(message) || prefix.equals(message) ? prefix : prefix + "\n" + message);
+            }
+        });
+    }
+
+    /**
+     * 转换为高清图片 URL（original 尺寸）。
+     */
+    private String highResTmdbImage(String url) {
+        int marker = url.indexOf("/t/p/");
+        if (marker < 0) return url;
+        int sizeStart = marker + "/t/p/".length();
+        int sizeEnd = url.indexOf('/', sizeStart);
+        if (sizeEnd < 0) return url;
+        return url.substring(0, sizeStart) + "original" + url.substring(sizeEnd);
+    }
+}

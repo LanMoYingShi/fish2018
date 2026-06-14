@@ -127,6 +127,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private Runnable mR1;
     private Runnable mR2;
     private Runnable mR3;
+
+    // TMDB 模式相关字段
+    private com.fongmi.android.tv.ui.helper.TmdbUIAdapter mTmdbUIAdapter;
+    private com.fongmi.android.tv.ui.custom.TmdbHeaderView mTmdbHeaderView;
     private Runnable mR4;
     private Clock mClock;
     private View mFocus1;
@@ -178,6 +182,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, boolean cast) {
+        start(activity, key, id, name, pic, mark, collect, cast, null);
+    }
+
+    public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, boolean cast, com.fongmi.android.tv.bean.TmdbItem tmdbItem) {
         long launch = System.currentTimeMillis();
         SpiderDebug.log("video-flow", "launch request key=%s id=%s name=%s collect=%s cast=%s", key, id, name, collect, cast);
         if (dispatchToContentHandler(activity, key, id, name, pic, mark, cast)) {
@@ -186,6 +194,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         }
         Intent intent = new Intent(activity, VideoActivity.class);
         intent.putExtra("launchTime", launch);
+        intent.putExtra("tmdbMode", tmdbItem != null);
+        intent.putExtra("tmdbItem", tmdbItem);
         intent.putExtra("collect", collect);
         intent.putExtra("cast", cast);
         intent.putExtra("mark", mark);
@@ -195,6 +205,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         intent.putExtra("id", id);
         activity.startActivity(intent);
         SpiderDebug.log("video-flow", "launch dispatched cost=%dms key=%s id=%s", System.currentTimeMillis() - launch, key, id);
+    }
+
+    public static void startWithTmdb(Activity activity, String key, String id, String name, String pic, String mark, com.fongmi.android.tv.bean.TmdbItem tmdbItem) {
+        start(activity, key, id, name, pic, mark, false, false, tmdbItem);
     }
 
     private static boolean dispatchToContentHandler(Activity activity, String key, String id, String name, String pic, String mark, boolean cast) {
@@ -239,6 +253,14 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     private Episode getEpisode() {
         return mEpisodeAdapter.getActivated();
+    }
+
+    private boolean isTmdbMode() {
+        return getIntent().getBooleanExtra("tmdbMode", false);
+    }
+
+    private com.fongmi.android.tv.bean.TmdbItem getTmdbItem() {
+        return (com.fongmi.android.tv.bean.TmdbItem) getIntent().getSerializableExtra("tmdbItem");
     }
 
     private int getScale() {
@@ -322,6 +344,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         SpiderDebug.log("video-flow", "initView after playback cost=%dms", System.currentTimeMillis() - start);
         mFrameParams = mBinding.video.getLayoutParams();
         mClock = Clock.create(mBinding.widget.clock);
+        mClock.start();
         mKeyDown = CustomKeyDownVod.create(this);
         mObserveDetail = this::setDetail;
         mObservePlayer = this::setPlayer;
@@ -339,6 +362,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         setVideoView();
         SpiderDebug.log("video-flow", "initView video view ready cost=%dms", System.currentTimeMillis() - start);
         setViewModel();
+        initTmdbMode();
         checkId();
         SpiderDebug.log("video-flow", "initView end cost=%dms sinceLaunch=%dms", System.currentTimeMillis() - start, getLaunchCost(System.currentTimeMillis()));
     }
@@ -544,6 +568,16 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         checkKeepImg();
         setText(item);
         updateKeep();
+
+        // TMDB 增强：自动匹配并增强 Vod
+        if (mTmdbUIAdapter != null && mTmdbUIAdapter.isReady()) {
+            com.fongmi.android.tv.bean.TmdbItem tmdbItem = getTmdbItem();
+            if (tmdbItem != null) {
+                mTmdbUIAdapter.load(tmdbItem, item);
+            } else {
+                mTmdbUIAdapter.autoMatch(item.getName(), item);
+            }
+        }
     }
 
     private void setText(Vod item) {
@@ -1242,10 +1276,14 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void saveHistory(boolean exit) {
+        android.util.Log.d("VideoActivity", "saveHistory: exit=" + exit + " mHistory=" + (mHistory != null) +
+            " canSave=" + (mHistory != null ? mHistory.canSave() : "null") +
+            " incognito=" + Setting.isIncognito());
         if (mHistory == null || !mHistory.canSave() || Setting.isIncognito()) return;
         History history = mHistory.copy();
         Task.execute(() -> {
             history.merge().save();
+            android.util.Log.d("VideoActivity", "saveHistory: saved! key=" + history.getKey());
             if (exit) RefreshEvent.history();
         });
     }
@@ -1345,8 +1383,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     @Override
     protected void onPrepare() {
+        android.util.Log.d("VideoActivity", "onPrepare: setting Clock callback");
         setDecode();
         setPosition();
+        mClock.setCallback(this);
     }
 
     @Override
@@ -1419,11 +1459,13 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     @Override
     public void onTimeChanged(long time) {
+        android.util.Log.d("VideoActivity", "onTimeChanged: isOwner=" + isOwner() + " mHistory=" + (mHistory != null));
         if (!isOwner()) return;
         long position, duration;
         mHistory.setCreateTime(time);
         mHistory.setPosition(position = player().getPosition());
         mHistory.setDuration(duration = player().getDuration());
+        android.util.Log.d("VideoActivity", "onTimeChanged: position=" + position + " duration=" + duration + " canSave=" + mHistory.canSave());
         if (mHistory.canSave() && mHistory.canSync()) syncHistory();
         if (mHistory.getEnding() > 0 && duration > 0 && mHistory.getEnding() + position >= duration) {
             checkEnded(false);
@@ -1595,6 +1637,21 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void setFullscreen(boolean fullscreen) {
         this.fullscreen = fullscreen;
         mBinding.control.action.fullscreen.setText(fullscreen ? R.string.play_exit_fullscreen : R.string.play_fullscreen);
+    }
+
+    private void initTmdbMode() {
+        // TMDB 模式：通过全局开关或 Intent 参数启用
+        if (!isTmdbMode() && !Setting.isTmdbEnabled()) return;
+
+        mTmdbUIAdapter = new com.fongmi.android.tv.ui.helper.TmdbUIAdapter(this);
+        if (!mTmdbUIAdapter.isReady()) {
+            SpiderDebug.log("TMDB 增强已启用，但配置未就绪（需要 API Key）");
+            return;
+        }
+        com.fongmi.android.tv.bean.TmdbItem tmdbItem = getTmdbItem();
+        if (tmdbItem != null) {
+            SpiderDebug.log("TMDB 模式: 使用传入的 TmdbItem");
+        }
     }
 
     private void applyShortDramaMode() {

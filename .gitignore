@@ -22,3 +22,4 @@ nostr_副本*.html
 *.log
 third_party/sources/
 app/signing/
+.gradle-user-home/

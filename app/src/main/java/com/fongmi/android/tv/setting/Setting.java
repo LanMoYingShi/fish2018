@@ -327,4 +327,28 @@ public class Setting {
     public static boolean isShortDramaSiteEnabled(String key, String name) {
         return ShortDramaConfig.objectFrom(getShortDramaConfig()).isSiteEnabled(key, name);
     }
+
+    public static String getTmdbConfig() {
+        return Prefers.getString("tmdb_config");
+    }
+
+    public static void putTmdbConfig(String value) {
+        Prefers.put("tmdb_config", value);
+    }
+
+    public static boolean isTmdbReady() {
+        return com.fongmi.android.tv.bean.TmdbConfig.objectFrom(getTmdbConfig()).isReady();
+    }
+
+    public static boolean isTmdbSiteEnabled(String key, String name) {
+        return com.fongmi.android.tv.bean.TmdbConfig.objectFrom(getTmdbConfig()).isSiteEnabled(key, name);
+    }
+
+    public static boolean isTmdbEnabled() {
+        return Prefers.getBoolean("tmdb_enabled", false);
+    }
+
+    public static void putTmdbEnabled(boolean enabled) {
+        Prefers.put("tmdb_enabled", enabled);
+    }
 }

@@ -550,4 +550,38 @@
         <item>选择字幕</item>
     </string-array>
 
+    <string name="setting_tmdb_source">TMDB 元数据配置</string>
+    <string name="dialog_tmdb_api_key_label">TMDB API Key 或 Access Token</string>
+    <string name="dialog_tmdb_api_key_hint">输入 API Key 或 v4 Access Token</string>
+    <string name="dialog_tmdb_api_key_tip">免费获取 API Key: https://www.themoviedb.org/settings/api</string>
+    <string name="dialog_omdb_api_key_label">OMDb API Key（可选，用于 IMDb 评分）</string>
+    <string name="dialog_omdb_api_key_hint">输入 OMDb API Key</string>
+    <string name="dialog_omdb_api_key_tip">免费获取 API Key（每天1000次）: https://www.omdbapi.com/apikey.aspx</string>
+    <string name="dialog_tmdb_enable_label">启用 TMDB 元数据增强</string>
+    <string name="dialog_tmdb_enable_tip">为视频详情页自动匹配并补充 TMDB 简介、演员、评分等信息</string>
+    <string name="dialog_tmdb_enabled_sites_label">启用站点规则</string>
+    <string name="dialog_tmdb_disabled_sites_label">已排除站点</string>
+    <string name="dialog_tmdb_add_rule_hint">添加关键词或站点…</string>
+    <string name="dialog_tmdb_add">添加</string>
+    <string name="dialog_tmdb_all_sites">全部站点</string>
+    <string name="dialog_tmdb_site_manage">选择站点</string>
+    <string name="dialog_tmdb_reset_default">恢复默认</string>
+    <string name="tmdb_cast_label">演员</string>
+    <string name="tmdb_powered_by">数据来源：TMDB</string>
+    <string name="tmdb_photos_label">剧照</string>
+    <string name="tmdb_crew_label">主创团队</string>
+    <string name="tmdb_recommendations_label">猜你喜欢</string>
+    <string name="detail_work_searching">正在当前站源搜索 %1$s...</string>
+    <string name="detail_work_global_searching">当前站源无结果，正在全局搜索 %1$s...</string>
+    <string name="detail_image_save">保存</string>
+    <string name="detail_image_saving">正在保存图片...</string>
+    <string name="detail_image_save_success">已保存至：%1$s</string>
+    <string name="detail_image_save_failed">图片保存失败</string>
+    <string name="detail_image_permission_denied">存储权限被拒绝</string>
+
+    <string name="detail_tmdb_photos">剧照</string>
+    <string name="detail_no_overview">暂无简介</string>
+    <string name="detail_image_rotate">旋转</string>
+    <string name="tmdb_external_links_label">外部链接</string>
+
 </resources>

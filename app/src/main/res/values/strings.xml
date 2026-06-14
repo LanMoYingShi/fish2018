@@ -570,4 +570,38 @@
         <item>Select subtitle track</item>
     </string-array>
 
+    <string name="setting_tmdb_source">TMDB metadata config</string>
+    <string name="dialog_tmdb_api_key_label">TMDB API Key or Access Token</string>
+    <string name="dialog_tmdb_api_key_hint">Enter API Key or v4 Access Token</string>
+    <string name="dialog_tmdb_api_key_tip">Get your free API key at: https://www.themoviedb.org/settings/api</string>
+    <string name="dialog_omdb_api_key_label">OMDb API Key (Optional, for IMDb ratings)</string>
+    <string name="dialog_omdb_api_key_hint">Enter OMDb API Key</string>
+    <string name="dialog_omdb_api_key_tip">Get free API Key (1000/day): https://www.omdbapi.com/apikey.aspx</string>
+    <string name="dialog_tmdb_enable_label">Enable TMDB metadata</string>
+    <string name="dialog_tmdb_enable_tip">Auto-fetch metadata (overview, cast, ratings) from TMDB for video details</string>
+    <string name="dialog_tmdb_enabled_sites_label">Enabled sources</string>
+    <string name="dialog_tmdb_disabled_sites_label">Excluded sources</string>
+    <string name="dialog_tmdb_add_rule_hint">Add keyword or source…</string>
+    <string name="dialog_tmdb_add">Add</string>
+    <string name="dialog_tmdb_all_sites">All sources</string>
+    <string name="dialog_tmdb_site_manage">Select sources</string>
+    <string name="dialog_tmdb_reset_default">Reset to default</string>
+    <string name="tmdb_cast_label">Cast</string>
+    <string name="tmdb_powered_by">Powered by TMDB</string>
+    <string name="tmdb_photos_label">Backdrops</string>
+    <string name="tmdb_crew_label">Crew</string>
+    <string name="tmdb_recommendations_label">You May Like</string>
+    <string name="detail_work_searching">Searching current source for %1$s...</string>
+    <string name="detail_work_global_searching">No current-source result. Searching all sites for %1$s...</string>
+    <string name="detail_image_save">Save</string>
+    <string name="detail_image_saving">Saving image...</string>
+    <string name="detail_image_save_success">Saved to: %1$s</string>
+    <string name="detail_image_save_failed">Image save failed</string>
+    <string name="detail_image_permission_denied">Storage permission denied</string>
+
+    <string name="detail_tmdb_photos">剧照</string>
+    <string name="detail_no_overview">暂无简介</string>
+    <string name="detail_image_rotate">旋转</string>
+    <string name="tmdb_external_links_label">外部链接</string>
+
 </resources>

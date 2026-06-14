@@ -229,6 +229,54 @@
         android:orientation="vertical"
         android:paddingBottom="8dp">
 
+        <!-- TMDB 演员 -->
+        <androidx.leanback.widget.HorizontalGridView
+            android:id="@+id/tmdbCast"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:visibility="gone" />
+
+        <!-- TMDB 剧照 -->
+        <androidx.leanback.widget.HorizontalGridView
+            android:id="@+id/tmdbPhotos"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:visibility="gone" />
+
+        <!-- TMDB 主创团队 -->
+        <androidx.leanback.widget.HorizontalGridView
+            android:id="@+id/tmdbCrew"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:visibility="gone" />
+
+        <!-- TMDB 猜你喜欢 -->
+        <androidx.leanback.widget.HorizontalGridView
+            android:id="@+id/tmdbRecommendations"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:visibility="gone" />
+
         <androidx.leanback.widget.HorizontalGridView
             android:id="@+id/flag"
             android:layout_width="match_parent"

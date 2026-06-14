@@ -33,6 +33,10 @@ public class ShortDramaSourceDialog {
     private TextView disabledLabel;
     private Runnable onDismiss;
 
+    // 暂存数据，点"确定"才保存
+    private List<String> tempEnabledRules;
+    private List<String> tempDisabledSites;
+
     public static ShortDramaSourceDialog create(FragmentActivity activity) {
         return new ShortDramaSourceDialog(activity);
     }
@@ -56,8 +60,11 @@ public class ShortDramaSourceDialog {
         View manageBtn = view.findViewById(R.id.manage);
         View resetBtn = view.findViewById(R.id.resetDefault);
 
+        // 初始化暂存数据
         ShortDramaConfig config = ShortDramaConfig.objectFrom(Setting.getShortDramaConfig());
-        updateChipsDisplay(config);
+        tempEnabledRules = new ArrayList<>(config.getEnabledSites());
+        tempDisabledSites = new ArrayList<>(config.getDisabledSites());
+        updateChipsDisplay();
 
         addBtn.setOnClickListener(v -> addRule(ruleInput));
         ruleInput.setOnEditorActionListener((v, actionId, event) -> {
@@ -73,25 +80,26 @@ public class ShortDramaSourceDialog {
         dialog = new MaterialAlertDialogBuilder(activity)
                 .setTitle(R.string.setting_short_drama_source)
                 .setView(view)
+                .setPositiveButton(R.string.dialog_positive, (d, w) -> onSave())
                 .setNegativeButton(R.string.dialog_negative, null)
                 .setOnDismissListener(d -> { if (onDismiss != null) onDismiss.run(); })
                 .create();
         dialog.show();
     }
 
-    private void onSave(DialogInterface d, int which) {
-        // Chip 模式下配置已实时保存，这里只需关闭
+    private void onSave() {
+        String json = "{\"configured\":true,\"enabledSites\":" + toJsonArray(tempEnabledRules) + ",\"disabledSites\":" + toJsonArray(tempDisabledSites) + "}";
+        Setting.putShortDramaConfig(ShortDramaConfig.objectFrom(json).toJson());
     }
 
     private void showSiteManage() {
         List<Site> sites = VodConfig.get().getSites().stream().filter(s -> s != null && !s.isEmpty()).toList();
         if (sites.isEmpty()) return;
 
-        ShortDramaConfig config = ShortDramaConfig.objectFrom(Setting.getShortDramaConfig());
-        List<String> enabledRules = config.getEnabledSites().isEmpty()
+        List<String> enabledRules = tempEnabledRules.isEmpty()
             ? List.of(ShortDramaConfig.defaultRulesText().split(";"))
-            : config.getEnabledSites();
-        List<String> disabledSites = new ArrayList<>(config.getDisabledSites());
+            : new ArrayList<>(tempEnabledRules);
+        List<String> disabledSites = new ArrayList<>(tempDisabledSites);
 
         String[] labels = new String[sites.size()];
         boolean[] checked = new boolean[sites.size()];
@@ -149,12 +157,12 @@ public class ShortDramaSourceDialog {
             }
         }
 
-        // 立即保存配置
-        String json = "{\"configured\":true,\"enabledSites\":" + toJsonArray(newEnabled) + ",\"disabledSites\":" + toJsonArray(disabledSites) + "}";
-        Setting.putShortDramaConfig(ShortDramaConfig.objectFrom(json).toJson());
+        // 更新暂存数据（点"确定"才保存）
+        tempEnabledRules = newEnabled;
+        tempDisabledSites = disabledSites;
 
         // 刷新 Chip 显示
-        updateChipsDisplay(ShortDramaConfig.objectFrom(Setting.getShortDramaConfig()));
+        updateChipsDisplay();
     }
 
     private void updateDisabledDisplay(ShortDramaConfig config) {
@@ -238,13 +246,13 @@ public class ShortDramaSourceDialog {
     }
 
     // Chip 相关方法
-    private void updateChipsDisplay(ShortDramaConfig config) {
+    private void updateChipsDisplay() {
         enabledChips.removeAllViews();
         disabledChips.removeAllViews();
 
-        List<String> enabledRules = config.getEnabledSites().isEmpty()
+        List<String> enabledRules = tempEnabledRules.isEmpty()
             ? List.of(ShortDramaConfig.defaultRulesText().split(";"))
-            : config.getEnabledSites();
+            : tempEnabledRules;
 
         for (String rule : enabledRules) {
             if (TextUtils.isEmpty(rule)) continue;
@@ -252,14 +260,13 @@ public class ShortDramaSourceDialog {
             enabledChips.addView(chip);
         }
 
-        List<String> disabled = config.getDisabledSites();
-        if (disabled.isEmpty()) {
+        if (tempDisabledSites.isEmpty()) {
             disabledLabel.setVisibility(View.GONE);
             disabledChips.setVisibility(View.GONE);
         } else {
             disabledLabel.setVisibility(View.VISIBLE);
             disabledChips.setVisibility(View.VISIBLE);
-            for (String key : disabled) {
+            for (String key : tempDisabledSites) {
                 Site site = findSite(key);
                 String displayName = site != null ? displayName(site) : key;
                 Chip chip = createChip(displayName, true);
@@ -299,62 +306,42 @@ public class ShortDramaSourceDialog {
     }
 
     private void removeFromBlacklist(String key) {
-        ShortDramaConfig config = ShortDramaConfig.objectFrom(Setting.getShortDramaConfig());
-        List<String> disabled = new ArrayList<>(config.getDisabledSites());
-        disabled.remove(key);
-
-        String json = "{\"configured\":true,\"enabledSites\":" + toJsonArray(config.getEnabledSites()) + ",\"disabledSites\":" + toJsonArray(disabled) + "}";
-        Setting.putShortDramaConfig(ShortDramaConfig.objectFrom(json).toJson());
-
-        updateChipsDisplay(ShortDramaConfig.objectFrom(Setting.getShortDramaConfig()));
+        tempDisabledSites.remove(key);
+        updateChipsDisplay();
     }
 
     private void removeEnabledRule(String rule) {
-        ShortDramaConfig config = ShortDramaConfig.objectFrom(Setting.getShortDramaConfig());
-        List<String> enabled = new ArrayList<>(config.getEnabledSites());
-
         // 尝试按显示名和 key 移除
         Site site = findSite(rule);
         if (site != null) {
-            enabled.remove(site.getKey());
-            enabled.remove(displayName(site));
+            tempEnabledRules.remove(site.getKey());
+            tempEnabledRules.remove(displayName(site));
         } else {
-            enabled.remove(rule);
+            tempEnabledRules.remove(rule);
         }
-
-        String json = "{\"configured\":true,\"enabledSites\":" + toJsonArray(enabled) + ",\"disabledSites\":" + toJsonArray(config.getDisabledSites()) + "}";
-        Setting.putShortDramaConfig(ShortDramaConfig.objectFrom(json).toJson());
-
-        updateChipsDisplay(ShortDramaConfig.objectFrom(Setting.getShortDramaConfig()));
+        updateChipsDisplay();
     }
 
     private void resetToDefault() {
-        String json = "{\"configured\":true,\"enabledSites\":[],\"disabledSites\":[]}";
-        Setting.putShortDramaConfig(ShortDramaConfig.objectFrom(json).toJson());
-        updateChipsDisplay(ShortDramaConfig.objectFrom(Setting.getShortDramaConfig()));
+        tempEnabledRules.clear();
+        tempDisabledSites.clear();
+        updateChipsDisplay();
     }
 
     private void addRule(EditText input) {
         String rule = input.getText().toString().trim();
         if (TextUtils.isEmpty(rule)) return;
 
-        ShortDramaConfig config = ShortDramaConfig.objectFrom(Setting.getShortDramaConfig());
-        List<String> enabled = new ArrayList<>(config.getEnabledSites());
-
         // 去重：站点 key/名称 或关键词已存在则不重复添加
         Site site = findSite(rule);
         String toAdd = site != null ? site.getKey() : rule;
-        if (enabled.contains(toAdd)) {
+        if (tempEnabledRules.contains(toAdd)) {
             input.setText("");
             return;
         }
 
-        enabled.add(toAdd);
-
-        String json = "{\"configured\":true,\"enabledSites\":" + toJsonArray(enabled) + ",\"disabledSites\":" + toJsonArray(config.getDisabledSites()) + "}";
-        Setting.putShortDramaConfig(ShortDramaConfig.objectFrom(json).toJson());
-
+        tempEnabledRules.add(toAdd);
         input.setText("");
-        updateChipsDisplay(ShortDramaConfig.objectFrom(Setting.getShortDramaConfig()));
+        updateChipsDisplay();
     }
 }

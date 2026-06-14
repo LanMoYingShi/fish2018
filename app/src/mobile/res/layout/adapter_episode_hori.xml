@@ -1,13 +1,111 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.textview.MaterialTextView xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- 选集项布局：支持简单文本模式和 TMDB 卡片模式 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/text"
+    android:id="@+id/container"
     android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:background="@drawable/shape_item"
-    android:ellipsize="marquee"
-    android:gravity="center"
-    android:singleLine="true"
-    android:textColor="@color/selector_text"
-    android:textSize="14sp"
-    tools:text="20" />
+    android:layout_height="wrap_content">
+
+    <!-- 简单文本模式（非 TMDB） -->
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/shape_item"
+        android:ellipsize="marquee"
+        android:gravity="center"
+        android:singleLine="true"
+        android:textColor="@color/selector_text"
+        android:textSize="14sp"
+        tools:text="20" />
+
+    <!-- TMDB 卡片模式 -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/card"
+        android:layout_width="200dp"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="12dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone"
+        app:cardBackgroundColor="@color/selector_card"
+        app:cardCornerRadius="8dp"
+        app:cardElevation="2dp"
+        app:strokeColor="@color/selector_stroke"
+        app:strokeWidth="1dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- 剧照 -->
+            <ImageView
+                android:id="@+id/still"
+                android:layout_width="match_parent"
+                android:layout_height="112dp"
+                android:background="#1A1A1A"
+                android:contentDescription="@null"
+                android:scaleType="centerCrop" />
+
+            <!-- 标题和简介 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="8dp">
+
+                <!-- 标题和评分行 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <!-- 集数标题 -->
+                    <com.google.android.material.textview.MaterialTextView
+                        android:id="@+id/cardTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textColor="@color/selector_text"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        tools:text="1. 去有鳳凰的地方" />
+
+                    <!-- 评分 -->
+                    <com.google.android.material.textview.MaterialTextView
+                        android:id="@+id/rating"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:textColor="#FFD700"
+                        android:textSize="12sp"
+                        android:visibility="gone"
+                        tools:text="★8.5"
+                        tools:visibility="visible" />
+
+                </LinearLayout>
+
+                <!-- 简介 -->
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/overview"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:textColor="#AAAAAA"
+                    android:textSize="12sp"
+                    tools:text="这是集数的简介内容..." />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+</FrameLayout>

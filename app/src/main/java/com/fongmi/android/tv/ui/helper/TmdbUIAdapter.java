@@ -1,0 +1,298 @@
+package com.fongmi.android.tv.ui.helper;
+
+import android.app.Activity;
+import android.text.TextUtils;
+
+import com.fongmi.android.tv.bean.Episode;
+import com.fongmi.android.tv.bean.Flag;
+import com.fongmi.android.tv.bean.TmdbConfig;
+import com.fongmi.android.tv.bean.TmdbEpisode;
+import com.fongmi.android.tv.bean.TmdbItem;
+import com.fongmi.android.tv.bean.TmdbPerson;
+import com.fongmi.android.tv.bean.Vod;
+import com.fongmi.android.tv.event.RefreshEvent;
+import com.fongmi.android.tv.service.TmdbService;
+import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.utils.Task;
+import com.github.catvod.crawler.SpiderDebug;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+/**
+ * TMDB 数据适配器
+ *
+ * 负责在 VideoActivity 的 TMDB 模式下：
+ * 1. 根据视频名称自动搜索匹配 TMDB 条目
+ * 2. 加载详情、演员、简介等元数据
+ * 3. 把元数据写回 {@link Vod} 并通过 {@link RefreshEvent#vod(Vod)} 推送到 UI
+ *
+ * 该类位于 src/main，被 mobile / leanback 两个 flavor 共享，因此只依赖
+ * 两端都存在的事件机制，不直接操作各自布局生成的 binding 字段。
+ */
+public class TmdbUIAdapter {
+
+    private final Activity activity;
+    private final TmdbService tmdbService;
+    private final TmdbMatcher tmdbMatcher;
+    private final TmdbConfig tmdbConfig;
+
+    private TmdbItem tmdbItem;
+    private JsonObject tmdbDetail;
+    private List<TmdbPerson> tmdbCast;
+    private boolean loaded;
+
+    public TmdbUIAdapter(Activity activity) {
+        this.activity = activity;
+        this.tmdbService = new TmdbService();
+        this.tmdbConfig = TmdbConfig.objectFrom(Setting.getTmdbConfig());
+        this.tmdbMatcher = new TmdbMatcher(tmdbService, tmdbConfig);
+    }
+
+    public boolean isReady() {
+        return tmdbConfig.isReady();
+    }
+
+    public boolean isLoaded() {
+        return loaded;
+    }
+
+    public TmdbItem getTmdbItem() {
+        return tmdbItem;
+    }
+
+    public JsonObject getTmdbDetail() {
+        return tmdbDetail;
+    }
+
+    public List<TmdbPerson> getCast() {
+        return tmdbCast == null ? new ArrayList<>() : tmdbCast;
+    }
+
+    /**
+     * 直接指定 TMDB 条目并加载详情。
+     */
+    public void load(TmdbItem item, Vod vod) {
+        if (item == null) return;
+        this.tmdbItem = item;
+        loadDetail(vod);
+    }
+
+    /**
+     * 根据视频名称自动搜索匹配并加载详情。
+     *
+     * @param videoName 视频标题（通常取详情页解析出的名称）
+     * @param vod       待增强的 Vod；增强后通过事件推回 UI
+     */
+    public void autoMatch(String videoName, Vod vod) {
+        if (!isReady()) {
+            SpiderDebug.log("tmdb", "skip auto match: config not ready");
+            notifyLoadComplete(vod);
+            return;
+        }
+        if (TextUtils.isEmpty(videoName)) {
+            notifyLoadComplete(vod);
+            return;
+        }
+        Task.execute(() -> {
+            TmdbItem matched = tmdbMatcher.searchAndMatch(videoName);
+            if (matched == null) {
+                SpiderDebug.log("tmdb", "auto match miss name=%s", videoName);
+                notifyLoadComplete(vod);
+                return;
+            }
+            tmdbItem = matched;
+            loadDetailSync(vod);
+        });
+    }
+
+    private void loadDetail(Vod vod) {
+        if (tmdbItem == null || !isReady()) return;
+        Task.execute(() -> loadDetailSync(vod));
+    }
+
+    private void loadDetailSync(Vod vod) {
+        try {
+            tmdbDetail = tmdbService.detail(tmdbItem, tmdbConfig);
+            tmdbCast = tmdbService.cast(tmdbDetail, tmdbConfig);
+            loaded = true;
+            if (vod != null) {
+                enrichVod(vod);
+                // 如果是电视剧，自动获取并应用集数信息
+                if (tmdbItem.isTv()) {
+                    applyEpisodeTitles(vod);
+                }
+                activity.runOnUiThread(() -> RefreshEvent.vod(vod));
+            }
+            SpiderDebug.log("tmdb", "detail loaded title=%s cast=%d", tmdbItem.getTitle(), getCast().size());
+        } catch (Exception e) {
+            SpiderDebug.log("tmdb", "detail load failed: %s", e.getMessage());
+            notifyLoadComplete(vod);
+        }
+    }
+
+    private void notifyLoadComplete(Vod vod) {
+        // TMDB 加载失败或跳过时，仍然发送 RefreshEvent 让 UI 继续
+        if (vod != null) {
+            activity.runOnUiThread(() -> RefreshEvent.vod(vod));
+        }
+    }
+
+    /**
+     * 把 TMDB 详情写回 Vod。仅在源数据缺失时补充，避免覆盖站点已有信息。
+     */
+    public void enrichVod(Vod vod) {
+        if (vod == null || tmdbDetail == null) return;
+
+        // 简介：优先使用 TMDB 翻译后的简介
+        String overview = tmdbService.translatedOverview(tmdbDetail, tmdbConfig);
+        if (!TextUtils.isEmpty(overview) && overview.length() > vod.getContent().length()) {
+            vod.setContent(overview);
+        }
+
+        // 海报：源站缺失时使用 TMDB 海报
+        if (TextUtils.isEmpty(vod.getPic()) && !TextUtils.isEmpty(tmdbItem.getPosterUrl())) {
+            vod.setPic(tmdbItem.getPosterUrl());
+        }
+
+        // 演员：源站缺失时使用 TMDB 演员表（无法直接设置，Vod 无 setter）
+        // 可通过扩展 Vod 添加 setActor() 或在 VideoActivity 显示时从 adapter 获取
+
+        // 导演 / 主创：源站缺失时使用 TMDB 主创
+        if (TextUtils.isEmpty(vod.getDirector())) {
+            List<TmdbPerson> creators = tmdbService.creators(tmdbDetail, tmdbConfig);
+            List<String> names = new ArrayList<>();
+            for (TmdbPerson person : creators) {
+                if (!TextUtils.isEmpty(person.getName())) names.add(person.getName());
+                if (names.size() >= 5) break;
+            }
+            if (!names.isEmpty()) vod.setDirector(TextUtils.join(" / ", names));
+        }
+    }
+
+    /**
+     * 获取并应用 TMDB 集数标题到 Vod（仅针对电视剧）。
+     */
+    private void applyEpisodeTitles(Vod vod) {
+        if (vod == null || vod.getFlags() == null) return;
+        try {
+            // 尝试获取第1季
+            JsonObject season = null;
+            int seasonNumber = 1;
+            try {
+                season = tmdbService.season(tmdbItem, 1, tmdbConfig);
+            } catch (Exception ignored) {
+            }
+
+            // 第1季失败，尝试第0季（特别篇）
+            if (season == null) {
+                try {
+                    seasonNumber = 0;
+                    season = tmdbService.season(tmdbItem, 0, tmdbConfig);
+                } catch (Exception ignored) {
+                }
+            }
+
+            if (season == null) return;
+
+            List<TmdbEpisode> episodes = tmdbService.episodes(season, tmdbConfig, tmdbItem.getTmdbId(), seasonNumber);
+            if (episodes.isEmpty()) return;
+
+            // 先排序集数
+            com.fongmi.android.tv.utils.TmdbEpisodeSorter.sort(vod);
+
+            // 应用标题到每个 Episode
+            for (Flag flag : vod.getFlags()) {
+                for (Episode episode : flag.getEpisodes()) {
+                    TmdbEpisode tmdbEp = findEpisodeByNumber(episodes, episode.getNumber());
+                    if (tmdbEp != null) {
+                        episode.setTmdbEpisode(tmdbEp);
+                        if (!tmdbEp.getTitle().isEmpty() && !episode.getDisplayName().contains(tmdbEp.getTitle())) {
+                            episode.setDisplayName(episode.getNumber() + ". " + tmdbEp.getTitle());
+                        }
+                    }
+                }
+            }
+            SpiderDebug.log("tmdb", "应用集数标题: %d 集", episodes.size());
+        } catch (Exception e) {
+            SpiderDebug.log("tmdb", "获取集数信息失败: %s", e.getMessage());
+        }
+    }
+
+    private TmdbEpisode findEpisodeByNumber(List<TmdbEpisode> episodes, int number) {
+        for (TmdbEpisode ep : episodes) {
+            if (ep.getNumber() == number) return ep;
+        }
+        return null;
+    }
+
+    /**
+     * 评分文本，形如 "8.6"，无评分返回空串。
+     */
+    public String getRatingText() {
+        if (tmdbDetail == null) return "";
+        if (!tmdbDetail.has("vote_average") || tmdbDetail.get("vote_average").isJsonNull()) return "";
+        double vote = tmdbDetail.get("vote_average").getAsDouble();
+        return vote <= 0 ? "" : String.format(Locale.US, "%.1f", vote);
+    }
+
+    /**
+     * 类型文本，形如 "剧情 / 动作"，无类型返回空串。
+     */
+    public String getGenresText() {
+        if (tmdbDetail == null || !tmdbDetail.has("genres")) return "";
+        JsonElement element = tmdbDetail.get("genres");
+        if (!element.isJsonArray()) return "";
+        JsonArray genres = element.getAsJsonArray();
+        List<String> names = new ArrayList<>();
+        for (JsonElement g : genres) {
+            if (!g.isJsonObject()) continue;
+            JsonObject obj = g.getAsJsonObject();
+            if (obj.has("name") && !obj.get("name").isJsonNull()) names.add(obj.get("name").getAsString());
+        }
+        return TextUtils.join(" / ", names);
+    }
+
+    /**
+     * 获取剧照列表（backdrops）。
+     */
+    public List<String> getPhotos() {
+        if (tmdbDetail == null) return new ArrayList<>();
+        return tmdbService.photos(tmdbDetail, tmdbConfig);
+    }
+
+    /**
+     * 获取主创团队（导演、编剧、制片）。
+     */
+    public List<TmdbPerson> getCreators() {
+        if (tmdbDetail == null) return new ArrayList<>();
+        return tmdbService.creators(tmdbDetail, tmdbConfig);
+    }
+
+    /**
+     * 获取推荐影片（recommendations + similar 合并去重）。
+     */
+    public List<TmdbItem> getRecommendations() {
+        if (tmdbDetail == null) return new ArrayList<>();
+        List<TmdbItem> items = new ArrayList<>(tmdbService.recommendations(tmdbDetail, tmdbConfig));
+        List<TmdbItem> similar = tmdbService.similar(tmdbDetail, tmdbConfig);
+        // 去重合并
+        for (TmdbItem item : similar) {
+            boolean exists = false;
+            for (TmdbItem existing : items) {
+                if (existing.getTmdbId() == item.getTmdbId()) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) items.add(item);
+            if (items.size() >= 12) break;
+        }
+        return items;
+    }
+}
+

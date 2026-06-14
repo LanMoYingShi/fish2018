@@ -10,6 +10,7 @@ import androidx.viewbinding.ViewBinding;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.AudioConfig;
 import com.fongmi.android.tv.bean.ShortDramaConfig;
+import com.fongmi.android.tv.bean.TmdbConfig;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.databinding.ActivitySettingEnhanceBinding;
 import com.fongmi.android.tv.setting.CustomCspSetting;
@@ -18,6 +19,7 @@ import com.fongmi.android.tv.setting.SiteHealthStore;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.dialog.AudioSourceDialog;
 import com.fongmi.android.tv.ui.dialog.ShortDramaSourceDialog;
+import com.fongmi.android.tv.ui.dialog.TmdbSourceDialog;
 import com.fongmi.android.tv.ui.dialog.CustomCspDialog;
 import com.fongmi.android.tv.ui.dialog.DebugLogDialog;
 import com.fongmi.android.tv.ui.dialog.LoginStateLearnDialog;
@@ -58,6 +60,7 @@ public class SettingEnhanceActivity extends BaseActivity {
         mBinding.driveCheck.setOnClickListener(this::setDriveCheck);
         mBinding.audioSource.setOnClickListener(this::setAudioSource);
         mBinding.shortDramaSource.setOnClickListener(this::setShortDramaSource);
+        mBinding.tmdbSource.setOnClickListener(this::setTmdbSource);
         mBinding.debugLog.setOnClickListener(this::setDebugLog);
         mBinding.siteHealthSort.setOnClickListener(view -> SiteHealthDialog.show(this, this::setText));
         mBinding.siteHealthSort.setOnLongClickListener(this::clearSiteHealth);
@@ -76,6 +79,7 @@ public class SettingEnhanceActivity extends BaseActivity {
         mBinding.driveCheckText.setText(getSwitch(Setting.isDriveCheck()));
         mBinding.audioSourceText.setText(getSwitch(!AudioConfig.objectFrom(Setting.getAudioConfig()).getDisplayRules().isEmpty()));
         mBinding.shortDramaSourceText.setText(getSwitch(!ShortDramaConfig.objectFrom(Setting.getShortDramaConfig()).getDisplayRules().isEmpty()));
+        mBinding.tmdbSourceText.setText(getSwitch(Setting.isTmdbEnabled()) + (Setting.isTmdbReady() ? " · 已配置" : " · 未配置"));
         mBinding.debugLogText.setText(getSwitch(Setting.isDebugLog()));
         mBinding.siteHealthSortText.setText(getSwitch(Setting.isSiteHealthSort()));
         WebHomeExtensionRegistry.Snapshot webHomeExtension = WebHomeExtensionRegistry.get().snapshot();
@@ -109,6 +113,10 @@ public class SettingEnhanceActivity extends BaseActivity {
 
     private void setShortDramaSource(View view) {
         ShortDramaSourceDialog.create(this).onDismiss(this::setText).show();
+    }
+
+    private void setTmdbSource(View view) {
+        TmdbSourceDialog.create(this).onDismiss(this::setText).show();
     }
 
     private boolean clearSiteHealth(View view) {
