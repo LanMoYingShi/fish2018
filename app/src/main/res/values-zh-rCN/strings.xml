@@ -1,7 +1,7 @@
 <resources xmlns:xliff="http://schemas.android.com/apk/res-auto">
 
     <!-- App -->
-    <string name="app_name">影视</string>
+    <string name="app_name">默影视</string>
 
     <!-- Live -->
     <string name="live_pass">密码</string>
@@ -605,6 +605,13 @@
     <string name="none">无</string>
     <string name="times">倍</string>
     <string name="lines">行</string>
+
+    <!-- SEARCH -->
+    <string name="search_scope_all">全部</string>
+    <string name="search_scope_group_hint">分组：%1$s</string>
+    <string name="search_result_all">%1$s 的搜索结果</string>
+    <string name="search_result_current">当前站搜索：%1$s</string>
+    <string name="search_result_group">%1$s 搜索：%2$s</string>
 
     <string-array name="select_decode">
         <item>软解</item>

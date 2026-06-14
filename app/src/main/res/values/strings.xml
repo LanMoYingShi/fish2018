@@ -616,6 +616,13 @@
     <string name="times">times</string>
     <string name="lines">lines</string>
 
+    <!-- SEARCH -->
+    <string name="search_scope_all">All</string>
+    <string name="search_scope_group_hint">Group: %1$s</string>
+    <string name="search_result_all">Search results for %1$s</string>
+    <string name="search_result_current">Current site search: %1$s</string>
+    <string name="search_result_group">%1$s search: %2$s</string>
+
     <string-array name="select_player">
         <item>EXO</item>
         <item>IJK</item>
