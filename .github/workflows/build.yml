@@ -76,13 +76,26 @@ jobs:
           sed -i 's/compileSdk = "37"/compileSdk = "36"/' gradle/libs.versions.toml
           grep 'compileSdk' gradle/libs.versions.toml
 
+      - name: Patch release build for CI
+        shell: bash
+        run: |
+          perl -0pi -e 's/minifyEnabled = true/minifyEnabled = false/g; s/shrinkResources = true/shrinkResources = false/g' app/build.gradle
+          grep -oE 'minifyEnabled = (true|false)|shrinkResources = (true|false)' app/build.gradle
+
+      - name: Fix missing Chaquopy consumer proguard file
+        shell: bash
+        run: |
+          mkdir -p chaquo/build/python
+          touch chaquo/build/python/proguard-rules.pro
+          ls -lh chaquo/build/python/proguard-rules.pro
+
       - name: Grant execute permission
         run: chmod +x gradlew
 
       - name: Build release APKs
         shell: bash
         run: |
-          ./gradlew --no-daemon --parallel --stacktrace clean \
+          ./gradlew --no-daemon --stacktrace clean \
             :app:assembleLeanbackArm64_v8aRelease \
             :app:assembleLeanbackArmeabi_v7aRelease \
             :app:assembleMobileArm64_v8aRelease \
