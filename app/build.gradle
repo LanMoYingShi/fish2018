@@ -1,153 +1,128 @@
-plugins {
-    alias libs.plugins.android.application
-}
+name: Build APK and Release
 
-def localProps = new Properties()
-def localPropsFile = rootProject.file('local.properties')
-if (localPropsFile.exists()) {
-    localPropsFile.withInputStream {
-        localProps.load(it)
-    }
-}
-def hasReleaseSigning = localProps['storeFile'] && localProps['keyAlias'] && localProps['storePassword']
+on:
+  push:
+    tags:
+      - "v*"
 
-android {
-    namespace = 'com.fongmi.android.tv'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag，例如 v5.5.2-1"
+        required: true
+        type: string
+      prerelease:
+        description: "是否标记为预发布版本"
+        required: false
+        type: boolean
+        default: false
 
-    compileSdk libs.versions.compileSdk.get().toInteger()
+permissions:
+  contents: write
 
-    defaultConfig {
-        applicationId "com.fongmi.android.tv"
-        minSdk libs.versions.minSdk.get().toInteger()
-        targetSdk libs.versions.targetSdk.get().toInteger()
-        versionCode 552
-        versionName "5.5.2"
-        javaCompileOptions {
-            annotationProcessorOptions {
-                arguments = ["room.schemaLocation": "$projectDir/schemas".toString(), "eventBusIndex": "com.fongmi.android.tv.event.EventIndex"]
-            }
-        }
-    }
+env:
+  GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8
 
-    flavorDimensions = ["mode", "abi"]
+jobs:
+  build-release:
+    name: Build and Release APKs
+    runs-on: ubuntu-latest
 
-    productFlavors {
-        leanback {
-            dimension "mode"
-        }
-        mobile {
-            dimension "mode"
-        }
-        arm64_v8a {
-            dimension "abi"
-            ndk { abiFilters "arm64-v8a" }
-        }
-        armeabi_v7a {
-            dimension "abi"
-            ndk { abiFilters "armeabi-v7a" }
-        }
-    }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    buildFeatures {
-        buildConfig = true
-        viewBinding = true
-    }
+      - name: Resolve release info
+        id: vars
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ inputs.tag }}"
+            PRERELEASE="${{ inputs.prerelease }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+            PRERELEASE="false"
+          fi
 
-    signingConfigs {
-        release {
-            if (hasReleaseSigning) {
-                storeFile file(localProps['storeFile'])
-                keyAlias localProps['keyAlias']
-                keyPassword localProps['storePassword']
-                storePassword localProps['storePassword']
-            }
-        }
-    }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
 
-    buildTypes {
-        release {
-            minifyEnabled = true
-            shrinkResources = true
-            signingConfig = hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro', 'proguard-rules-media.pro'
-        }
-    }
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
 
-    configurations.configureEach {
-        exclude group: 'stax', module: 'stax-api'
-        exclude group: 'xpp3', module: 'xpp3'
-        exclude group: 'com.android.support'
-        resolutionStrategy {
-            force libs.okhttp
-            eachDependency { details ->
-                if (details.requested.group == 'androidx.media3') {
-                    details.useVersion(libs.versions.media3.get())
-                    details.because('Use bundled Media3 build with MediaTitle and danmaku APIs')
-                }
-            }
-        }
-    }
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-    lint {
-        disable 'UnsafeOptInUsageError'
-        disable 'ExpiredTargetSdkVersion'
-    }
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-    compileOptions {
-        coreLibraryDesugaringEnabled = true
-        sourceCompatibility JavaVersion.VERSION_21
-        targetCompatibility JavaVersion.VERSION_21
-    }
-}
+      - name: Install Android platform
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install "platforms;android-37"
 
-androidComponents {
-    onVariants(selector().withBuildType('release')) { variant ->
-        def flavors = variant.productFlavors.collectEntries { [(it.first): it.second] }
-        def mode = flavors['mode'] ?: 'mode'
-        def abi = flavors['abi'] ?: 'abi'
-        variant.outputs.each { output ->
-            output.outputFileName.set("${mode}-${abi}.apk")
-        }
-    }
-}
+      - name: Grant execute permission
+        run: chmod +x gradlew
 
-dependencies {
-    implementation fileTree(dir: "libs", include: ["*.aar"])
-    implementation project(':catvod')
-    implementation project(':chaquo')
-    implementation project(':quickjs')
-    implementation libs.appcompat
-    implementation libs.lifecycle.service
-    implementation libs.media
-    implementation libs.bundles.media3
-    implementation libs.nextlib.media3ext
-    implementation libs.palette
-    implementation libs.recyclerview
-    implementation libs.room.runtime
-    implementation libs.splashscreen
-    implementation libs.swiperefreshlayout
-    implementation libs.viewpager2
-    implementation libs.webkit
-    implementation libs.android.gif.drawable
-    implementation libs.bundles.glide
-    implementation libs.bundles.jupnp
-    implementation libs.customactivityoncrash
-    implementation libs.eventbus
-    implementation libs.flexbox
-    implementation libs.lottie
-    implementation libs.material
-    implementation libs.materialdesigncolors
-    implementation libs.nanohttpd
-    implementation libs.newpipeextractor
-    implementation libs.permissionx
-    implementation libs.simple.xml
-    implementation libs.textdrawable
-    leanbackImplementation libs.leanback
-    leanbackImplementation libs.androidautosize
-    mobileImplementation libs.biometric
-    mobileImplementation libs.zxing.android.embedded
-    annotationProcessor libs.room.compiler
-    annotationProcessor libs.eventbus.annotation.processor
-    annotationProcessor libs.glide.compiler
-    coreLibraryDesugaring libs.desugar
-}
+      - name: Build release APKs
+        shell: bash
+        run: |
+          ./gradlew --no-daemon --parallel --stacktrace clean \
+            :app:assembleLeanbackArm64_v8aRelease \
+            :app:assembleLeanbackArmeabi_v7aRelease \
+            :app:assembleMobileArm64_v8aRelease \
+            :app:assembleMobileArmeabi_v7aRelease
+
+      - name: Collect APKs
+        shell: bash
+        run: |
+          rm -rf Release/apk
+          mkdir -p Release/apk
+
+          find app/build/outputs/apk -type f -name "*.apk" -path "*/release/*" -print0 | while IFS= read -r -d '' apk; do
+            cp "$apk" "Release/apk/$(basename "$apk")"
+          done
+
+          cd Release/apk
+
+          shopt -s nullglob
+          APKS=(*.apk)
+
+          if (( ${#APKS[@]} == 0 )); then
+            echo "No APK files found."
+            find ../../app/build/outputs/apk -type f || true
+            exit 1
+          fi
+
+          sha256sum "${APKS[@]}" > SHA256SUMS.txt
+          ls -lh
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webhtv-${{ steps.vars.outputs.tag }}-apk
+          path: Release/apk/*
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: WebHomeTV ${{ steps.vars.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          draft: false
+          prerelease: ${{ steps.vars.outputs.prerelease }}
+          generate_release_notes: true
+          files: |
+            Release/apk/*.apk
+            Release/apk/SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
