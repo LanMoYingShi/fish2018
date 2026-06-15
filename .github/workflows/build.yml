@@ -40,6 +40,19 @@ jobs:
       - name: Grant execute permission for gradle wrapper
         run: chmod +x gradlew
 
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Verify Python
+        run: |
+          python --version || true
+          python3 --version || true
+          which python || true
+          which python3 || true
+          python -c 'import sys; print(sys.executable)' || true
+
       - name: Build Release APK
         run: |
           set -x
