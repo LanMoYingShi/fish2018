@@ -46,9 +46,13 @@ jobs:
       
       - name: Build Release APK
         run: |
-          ./gradlew clean assemble\*Release \
-            -Dorg.gradle.jvmargs="-Xmx4g" \
-            --parallel
+          ./gradlew clean \
+          assembleLeanbackArm64_v8aRelease \
+          assembleLeanbackArmeabi_v7aRelease \
+          assembleMobileArm64_v8aRelease \
+          assembleMobileArmeabi_v7aRelease \
+          -Dorg.gradle.jvmargs="-Xmx4g" \
+          --parallel
       
       - name: Copy APKs to release directory
         run: |
