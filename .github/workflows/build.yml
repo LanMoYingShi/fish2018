@@ -46,7 +46,7 @@ jobs:
       
       - name: Build Release APK
         run: |
-            ./gradlew clean assemble*Release \
+            ./gradlew clean assembleRelease \
             -Dorg.gradle.jvmargs="-Xmx4g" \
             --parallel
       
