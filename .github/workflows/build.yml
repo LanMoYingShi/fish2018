@@ -162,6 +162,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
           tag_name: ${{ steps.vars.outputs.tag }}
           name: WebHomeTV ${{ steps.vars.outputs.tag }}
           target_commitish: ${{ github.sha }}
@@ -171,5 +172,3 @@ jobs:
           files: |
             Release/apk/*.apk
             Release/apk/SHA256SUMS.txt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
