@@ -68,7 +68,13 @@ jobs:
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager --install "platforms;android-37"
+          sdkmanager --install "platform-tools" "build-tools;36.0.0" "platforms;android-36"
+
+      - name: Patch compileSdk for CI
+        shell: bash
+        run: |
+          sed -i 's/compileSdk = "37"/compileSdk = "36"/' gradle/libs.versions.toml
+          grep 'compileSdk' gradle/libs.versions.toml
 
       - name: Grant execute permission
         run: chmod +x gradlew
