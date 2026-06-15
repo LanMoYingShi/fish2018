@@ -152,28 +152,15 @@ jobs:
           name: webhtv-${{ steps.vars.outputs.tag }}-apk
           path: Release/apk/*
 
-      - name: Create or update GitHub Release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="${{ steps.vars.outputs.tag }}"
-          TITLE="WebHomeTV $TAG"
-          PRERELEASE="${{ steps.vars.outputs.prerelease }}"
-          ASSETS=(Release/apk/*.apk Release/apk/SHA256SUMS.txt)
-
-          gh --version
-          echo "Publishing release: $TAG"
-          echo "Prerelease: $PRERELEASE"
-          printf 'Asset: %s\n' "${ASSETS[@]}"
-
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release already exists. Replacing assets."
-            gh release upload "$TAG" "${ASSETS[@]}" --clobber
-          else
-            args=(release create "$TAG" "${ASSETS[@]}" --title "$TITLE" --generate-notes --target "$GITHUB_SHA")
-            if [[ "$PRERELEASE" == "true" ]]; then
-              args+=(--prerelease)
-            fi
-            gh "${args[@]}"
-          fi
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.vars.outputs.tag }}
+          name: WebHomeTV ${{ steps.vars.outputs.tag }}
+          commit: ${{ github.sha }}
+          draft: false
+          prerelease: ${{ steps.vars.outputs.prerelease }}
+          generateReleaseNotes: true
+          allowUpdates: true
+          replacesArtifacts: true
+          artifacts: "Release/apk/*.apk,Release/apk/SHA256SUMS.txt"
