@@ -56,6 +56,8 @@ https://github.com/user-attachments/assets/7249b787-a720-406c-8365-acaa0995cb6a
 
 WebHome 扩展的示例和模板见 [docs/webhome-extension/](docs/webhome-extension/) 或 [CNB仓库](https://cnb.cool/fish2018/ext) 。
 
+AI 编程客户端如何接入和复用 Skills,见 [docs/skills/](docs/skills/) 。
+
 ## 二开重点
 
 ### 1. CSP 站点支持自定义 WebHome 首页
@@ -84,16 +86,17 @@ WebHome 页面会注入 `window.fongmi` 和简写 `window.fm`,网页可以直接
 | --- | --- |
 | `fm.req(url, options)` | 使用 App 内置 OkHttp 请求接口,绕过浏览器 CORS 限制 |
 | `fm.res(url, options)` | 生成本地资源网关地址(`/webResource`),给图片、视频、字幕等 DOM 资源使用 |
-| `fm.play(url, title, options)` | 播放直链或 `push://` 地址 |
-| `fm.vod(siteKey, vodId, title, pic, options)` | 打开 App 原生 CSP 详情/播放链路 |
+| `fm.play(url, title, options)` | 播放直链或 `push://` 地址,`options` 可带 `pic` 和 `wallPic` |
+| `fm.vod(siteKey, vodId, title, pic, options)` | 打开 App 原生 CSP 详情/播放链路,`options.wallPic` 可指定播放页背景图 |
 | `fm.vodInline(payload)` | 从 WebHome 传入临时 VOD,支持多集直链或按集即时解析,打开 App 原生播放页 |
+| `fm.preloadArtwork(pic, wallPic)` | 后台预热播放页海报和背景图,不阻塞后续播放跳转 |
 | `fm.search(keyword, { direct })` | 调用 App 搜索,支持直接进入搜索结果 |
 | `fm.openLive()` / `fm.openKeep()` / `fm.openSetting()` | 打开 App 原生直播、收藏和设置入口 |
 | `fm.history()` | 读取最近观看记录 |
 | `fm.stat()` | 获取当前播放状态、进度、时长等信息 |
 | `fm.ctrl(action)` | 控制播放、暂停、停止、上一集、下一集等 |
 | `fm.pan.check(items)` | 调用内置网盘链接有效性检测,`fm.check(items)` 是短别名 |
-| `fm.pan.play({ type, url, password, title })` | 播放网盘分享、磁力、电驴、thunder 等需要进入 push 链路的地址 |
+| `fm.pan.play({ type, url, password, title, pic, wallPic })` | 播放网盘分享、磁力、电驴、thunder 等需要进入 push 链路的地址,可带播放页图片 |
 | `fm.config()` | 获取当前配置和网盘检测开关状态 |
 | `fm.site()` | 获取当前站点信息 |
 | `fm.device()` | 获取设备信息 |
@@ -101,6 +104,8 @@ WebHome 页面会注入 `window.fongmi` 和简写 `window.fm`,网页可以直接
 | `fm.ext` | 扩展脚本辅助能力(info/log/toast) |
 | `fm.ui.setToolbar(visible)` | 控制 App 工具栏显示 |
 | `fm.back()` / `fm.reload()` | 处理网页返回和刷新 |
+
+播放页图片语义:`pic` 是海报/播放器默认图,`wallPic` 是播放页背景图。App 不会自动判断横竖屏,WebHome 应把竖版海报放在 `pic`,把横屏剧照/背景图放在 `wallPic`;播放背景优先级为 `wallPic -> pic -> App 默认背景`。`fm.play`、`fm.vod`、`fm.vodInline`、`fm.pan.play` 共用这套语义。详情页拿到图片后可先调用 `fm.preloadArtwork(pic, wallPic)` 预热原生 Glide 缓存,点击继续观看或播放时仍应直接调用 `fm.vod`/`fm.play`/`fm.vodInline`/`fm.pan.play`,不要在点击后等待预热。
 
 SDK 相关事件:
 
@@ -164,7 +169,7 @@ Content-Type: application/json
 
 检测接口支持批量提交,内部每批最多 10 条并发检测,超过 10 条自动分批。WebHome 开发时建议只检测用户当前可见范围内、且 App 支持的网盘类型,避免无意义请求和界面跳动。
 
-`fm.pan.play({ type, url, password, title })` 是 WebHome 的网盘播放语义入口,内部复用 App 已有的 `push_agent/pvideo` 播放链路。因为底层进入 `SiteApi.PUSH`,磁力、电驴、thunder、jianpian 等地址也可以走这个入口。性能与直接推送 `push://` 基本一致,但语义更清晰,也方便后续 App 内部调整播放策略。`password` 参数保留在 API 形态中,当前播放链路主要依赖 App/JAR/pvideo 自身处理。
+`fm.pan.play({ type, url, password, title, pic, wallPic })` 是 WebHome 的网盘播放语义入口,内部复用 App 已有的 `push_agent/pvideo` 播放链路。因为底层进入 `SiteApi.PUSH`,磁力、电驴、thunder、jianpian 等地址也可以走这个入口。性能与直接推送 `push://` 基本一致,但语义更清晰,也方便后续 App 内部调整播放策略。`password` 参数保留在 API 形态中,当前播放链路主要依赖 App/JAR/pvideo 自身处理。`pic`/`wallPic` 只影响原生播放页展示图,不参与网盘解析。
 
 ### 6.1 调试日志
 
@@ -180,7 +185,7 @@ Content-Type: application/json
 
 - 自定义盘搜服务地址、账号密码认证、自定义 TG 频道。
 - 按网盘类型分 Tab 展示,对支持的类型调用 App 内置检测,只检测可见范围内的结果,检测结果用状态圆点表达。
-- 点击资源后调用 `fm.pan.play({ type, url, password, title })` 交给 App 播放。
+- 点击资源后调用 `fm.pan.play({ type, url, password, title, pic, wallPic })` 交给 App 播放，并把详情页海报/剧照带给原生播放页。
 
 PanSou 搜索结果可能是异步补充的,示例页会轮询合并新增结果。
 
@@ -193,6 +198,7 @@ PanSou 搜索结果可能是异步补充的,示例页会轮询合并新增结果
 - Nostr 去中心化偏好同步;用户搜索、点击、播放时长等行为参与推荐计算,同一用户对同一条目的热度去重。
 - 状态面板展示 SDK、TMDB、Nostr、PanSou、发布状态和身份信息。
 - 支持清理本机测试数据和发布 Nostr 删除事件。
+- 详情页优先使用 TMDB 横屏剧照作为播放页 `wallPic`,没有横屏图时只传海报 `pic`;进入详情后会后台预热原生播放页图片,不阻塞"继续观看"跳转。
 
 示例页使用 TMDB API,请自行替换或管理 API Key,并遵守对应服务条款。
 
