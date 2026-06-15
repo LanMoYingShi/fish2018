@@ -46,7 +46,7 @@ jobs:
             PRERELEASE="false"
           else
             VERSION_NAME=$(grep -m1 'versionName' app/build.gradle | sed -E 's/.*versionName[[:space:]]+"([^"]+)".*/\1/')
-            TAG="v${VERSION_NAME}-ci.${GITHUB_RUN_NUMBER}"
+            TAG="v${VERSION_NAME}"
             PRERELEASE="true"
           fi
 
