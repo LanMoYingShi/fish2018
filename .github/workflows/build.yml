@@ -43,13 +43,19 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             TAG="${{ inputs.tag }}"
             PRERELEASE="${{ inputs.prerelease }}"
-          else
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF_NAME}"
             PRERELEASE="false"
+          else
+            VERSION_NAME=$(grep -m1 'versionName' app/build.gradle | sed -E 's/.*versionName[[:space:]]+"([^"]+)".*/\1/')
+            TAG="v${VERSION_NAME}-ci.${GITHUB_RUN_NUMBER}"
+            PRERELEASE="true"
           fi
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "Resolved release tag: $TAG"
+          echo "Resolved prerelease: $PRERELEASE"
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -156,7 +162,6 @@ jobs:
           path: Release/apk/*
 
       - name: Create GitHub Release
-        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
