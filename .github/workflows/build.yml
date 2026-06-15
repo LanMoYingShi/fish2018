@@ -70,7 +70,10 @@ jobs:
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager --channel=3 --install "platform-tools" "build-tools;36.0.0" "platforms;android-37"
+          sdkmanager --install "platform-tools" "build-tools;36.0.0" "platforms;android-36"
+          mkdir -p "$ANDROID_HOME/platforms"
+          ln -sfn "$ANDROID_HOME/platforms/android-36" "$ANDROID_HOME/platforms/android-37"
+          ls -lh "$ANDROID_HOME/platforms/android-37/android.jar"
 
       - name: Verify compileSdk
         shell: bash
