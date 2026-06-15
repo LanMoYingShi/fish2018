@@ -153,14 +153,16 @@ jobs:
           path: Release/apk/*
 
       - name: Create GitHub Release
-        uses: ncipollo/release-action@v1
+        uses: softprops/action-gh-release@v3
         with:
-          tag: ${{ steps.vars.outputs.tag }}
+          tag_name: ${{ steps.vars.outputs.tag }}
           name: WebHomeTV ${{ steps.vars.outputs.tag }}
-          commit: ${{ github.sha }}
+          target_commitish: ${{ github.sha }}
           draft: false
           prerelease: ${{ steps.vars.outputs.prerelease }}
-          generateReleaseNotes: true
-          allowUpdates: true
-          replacesArtifacts: true
-          artifacts: "Release/apk/*.apk,Release/apk/SHA256SUMS.txt"
+          generate_release_notes: true
+          files: |
+            Release/apk/*.apk
+            Release/apk/SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
