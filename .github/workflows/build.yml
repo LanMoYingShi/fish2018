@@ -82,6 +82,14 @@ jobs:
           perl -0pi -e 's/minifyEnabled = true/minifyEnabled = false/g; s/shrinkResources = true/shrinkResources = false/g' app/build.gradle
           grep -oE 'minifyEnabled = (true|false)|shrinkResources = (true|false)' app/build.gradle
 
+      - name: Grant execute permission
+        run: chmod +x gradlew
+
+      - name: Clean build
+        shell: bash
+        run: |
+          ./gradlew --no-daemon clean
+
       - name: Fix missing Chaquopy consumer proguard file
         shell: bash
         run: |
@@ -89,13 +97,10 @@ jobs:
           touch chaquo/build/python/proguard-rules.pro
           ls -lh chaquo/build/python/proguard-rules.pro
 
-      - name: Grant execute permission
-        run: chmod +x gradlew
-
       - name: Build release APKs
         shell: bash
         run: |
-          ./gradlew --no-daemon --stacktrace clean \
+          ./gradlew --no-daemon --stacktrace \
             :app:assembleLeanbackArm64_v8aRelease \
             :app:assembleLeanbackArmeabi_v7aRelease \
             :app:assembleMobileArm64_v8aRelease \
