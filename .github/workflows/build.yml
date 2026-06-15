@@ -45,10 +45,14 @@ jobs:
         run: chmod +x gradlew
       
       - name: Build Release APK
-        run: |
-            ./gradlew clean assembleRelease \
-            -Dorg.gradle.jvmargs="-Xmx4g" \
-            --parallel
+        run: | 
+          ./gradlew clean
+          :app:assembleLeanbackArm64_v8aRelease
+          :app:assembleLeanbackArmeabi_v7aRelease
+          :app:assembleMobileArm64_v8aRelease
+          :app:assembleMobileArmeabi_v7aRelease
+          -Dorg.gradle.jvmargs="-Xmx4g"
+          --parallel
       
       - name: Copy APKs to release directory
         run: |
