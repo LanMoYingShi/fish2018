@@ -45,6 +45,22 @@ android {
     }
 }
 
+def ensureChaquopyProguardRules = tasks.register('ensureChaquopyProguardRules') {
+    doLast {
+        def rulesFile = file("$buildDir/python/proguard-rules.pro")
+        rulesFile.parentFile.mkdirs()
+        if (!rulesFile.exists()) {
+            rulesFile.text = ''
+        }
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name.startsWith('merge') && task.name.endsWith('ConsumerProguardFiles')) {
+        task.dependsOn(ensureChaquopyProguardRules)
+    }
+}
+
 dependencies {
     implementation project(':catvod')
     coreLibraryDesugaring libs.desugar
