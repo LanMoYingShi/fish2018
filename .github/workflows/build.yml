@@ -122,12 +122,6 @@ jobs:
             exit $status
           fi
 
-      - name: Upload Gradle failure log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-build-log-${{ github.run_number }}
-          path: gradle-build.log
 
       - name: Collect APKs
         shell: bash
