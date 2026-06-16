@@ -121,7 +121,7 @@ jobs:
         run: |
           set +e
           ./gradlew --no-daemon --stacktrace --console=plain \
-           #  :app:assembleLeanbackArm64_v8aRelease \
+          # :app:assembleLeanbackArm64_v8aRelease \
             :app:assembleLeanbackArmeabi_v7aRelease \
             :app:assembleMobileArm64_v8aRelease \
             :app:assembleMobileArmeabi_v7aRelease > gradle-build.log 2>&1
