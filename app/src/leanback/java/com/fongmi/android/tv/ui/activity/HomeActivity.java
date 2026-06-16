@@ -57,6 +57,7 @@ import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.CustomRowPresenter;
 import com.fongmi.android.tv.ui.custom.CustomSelector;
 import com.fongmi.android.tv.ui.custom.CustomTitleView;
+import com.fongmi.android.tv.ui.dialog.ConfigDialog;
 import com.fongmi.android.tv.ui.dialog.SiteDialog;
 import com.fongmi.android.tv.ui.presenter.FuncPresenter;
 import com.fongmi.android.tv.ui.presenter.HeaderPresenter;
@@ -308,7 +309,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     private void setAdapter() {
         mHistoryAdapter = new ArrayObjectAdapter(mPresenter = new HistoryPresenter(this));
         mAdapter.add(new ListRow(mFuncAdapter = new ArrayObjectAdapter(new FuncPresenter(this))));
-        mAdapter.add(R.string.home_history);
+        if (Setting.isHomeHistory()) mAdapter.add(R.string.home_history);
         mAdapter.add(R.string.home_recommend);
     }
 
@@ -473,6 +474,12 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     }
 
     private void getHistory(boolean renew) {
+        if (!Setting.isHomeHistory()) {
+            removeHistoryRows();
+            return;
+        }
+        int headerIndex = mAdapter.indexOf(R.string.home_history);
+        if (headerIndex == -1) mAdapter.add(getRecommendHeaderIndex(), R.string.home_history);
         List<History> items = History.get();
         int historyIndex = getHistoryIndex();
         int recommendIndex = getRecommendIndex();
@@ -481,6 +488,19 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         if ((items.isEmpty() && exist) || (renew && exist)) mAdapter.removeItems(historyIndex, 1);
         if ((!items.isEmpty() && !exist) || (renew && exist)) mAdapter.add(historyIndex, new ListRow(mHistoryAdapter));
         mHistoryAdapter.setItems(items, new BaseDiffCallback<History>());
+    }
+
+    private void removeHistoryRows() {
+        int headerIndex = mAdapter.indexOf(R.string.home_history);
+        if (headerIndex == -1) return;
+        int recommendIndex = mAdapter.indexOf(R.string.home_recommend);
+        mAdapter.removeItems(headerIndex, recommendIndex - headerIndex);
+        mHistoryAdapter.clear();
+        mPresenter.setDelete(false);
+    }
+
+    private int getRecommendHeaderIndex() {
+        return mAdapter.indexOf(R.string.home_recommend);
     }
 
     private void setHistoryDelete(boolean delete) {
@@ -655,6 +675,21 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         SpiderDebug.log("site-dialog", "show returned delay=%sms", System.currentTimeMillis() - start);
     }
 
+    private void onHomeMenuKey() {
+        switch (Setting.getHomeMenuKey()) {
+            case 1 -> SiteDialog.create().action().show(this);
+            case 2 -> ConfigDialog.create().vod().show(this);
+            case 3 -> LiveActivity.start(this);
+            case 4 -> HistoryActivity.start(this);
+            case 5 -> SearchActivity.start(this);
+            case 6 -> PushActivity.start(this);
+            case 7 -> PushActivity.start(this, 3);
+            case 8 -> KeepActivity.start(this);
+            case 9 -> SettingActivity.start(this);
+            default -> showDialog();
+        }
+    }
+
     @Override
     public void onRefresh() {
         if (mWeb != null && mWeb.isVisible()) mWeb.reload();
@@ -691,7 +726,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (KeyUtil.isMenuKey(event)) {
-            showDialog();
+            onHomeMenuKey();
             return true;
         }
         if (mWeb != null && mWeb.isVisible()) {

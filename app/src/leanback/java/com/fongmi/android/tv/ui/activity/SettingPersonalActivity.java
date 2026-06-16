@@ -10,6 +10,7 @@ import androidx.viewbinding.ViewBinding;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.HomeButton;
 import com.fongmi.android.tv.databinding.ActivitySettingPersonalBinding;
+import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
@@ -117,6 +118,7 @@ public class SettingPersonalActivity extends BaseActivity {
 
     private void setHomeHistory(View view) {
         Setting.putHomeHistory(!Setting.isHomeHistory());
+        RefreshEvent.history();
         setText();
     }
 
