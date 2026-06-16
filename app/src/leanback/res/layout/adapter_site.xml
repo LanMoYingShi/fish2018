@@ -4,6 +4,9 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:clickable="true"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
     android:gravity="center_vertical"
     android:orientation="horizontal">
 
@@ -20,13 +23,14 @@
         android:layout_width="0dp"
         android:layout_height="46dp"
         android:layout_weight="1"
+        android:clickable="false"
         android:ellipsize="marquee"
         android:focusable="false"
         android:focusableInTouchMode="false"
         android:gravity="center"
         android:singleLine="true"
-        android:textColor="@color/selector_control"
-        android:textSize="18sp"
+        android:textColor="@color/selector_site_dialog_control"
+        android:textSize="14sp"
         app:backgroundTint="@color/selector_button"
         app:strokeColor="@color/selector_stroke"
         tools:text="泥巴" />
