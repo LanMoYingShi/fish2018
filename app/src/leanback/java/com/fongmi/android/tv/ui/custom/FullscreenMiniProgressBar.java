@@ -4,15 +4,15 @@ import android.content.Context;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ProgressBar;
 
-import androidx.appcompat.widget.AppCompatProgressBar;
 import androidx.media3.common.C;
 import androidx.media3.common.Player;
 import androidx.media3.ui.PlayerView;
 
 import com.fongmi.android.tv.R;
 
-public class FullscreenMiniProgressBar extends AppCompatProgressBar {
+public class FullscreenMiniProgressBar extends ProgressBar {
 
     private final Runnable ticker = this::updateProgress;
 
