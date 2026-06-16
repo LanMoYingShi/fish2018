@@ -1,0 +1,33 @@
+name: Revert upstream merge aea1e52
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/revert-aea1e52.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  revert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Revert merge commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main --tags
+          git checkout main
+          git reset --hard origin/main
+          git revert -m 1 --no-edit aea1e52eb5a0e3b99e5890bdd92793e244f34022
+          git push origin HEAD:main
