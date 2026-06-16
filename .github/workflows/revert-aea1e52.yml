@@ -31,3 +31,5 @@ jobs:
           git reset --hard origin/main
           git revert -m 1 --no-edit aea1e52eb5a0e3b99e5890bdd92793e244f34022
           git push origin HEAD:main
+
+# trigger: 1
