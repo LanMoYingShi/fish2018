@@ -4,10 +4,12 @@ import android.app.Dialog;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
+import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -17,6 +19,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.config.LiveConfig;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.bean.Config;
@@ -46,6 +49,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     private SiteAdapter adapter;
     private long showStart;
     private boolean action;
+    private boolean itemStyleApplied;
     private int type;
 
     public static SiteDialog create() {
@@ -75,7 +79,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     }
 
     private float getWidth() {
-        return action ? 0.42f : 0.36f;
+        return action ? 0.42f : 0.38f;
     }
 
     @Override
@@ -165,6 +169,33 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
         binding.recycler.setItemAnimator(null);
         if (decoration == null) binding.recycler.addItemDecoration(decoration = new SpaceItemDecoration(getCount(), ITEM_SPACE));
         if (binding.recycler.getLayoutManager() == null) binding.recycler.setLayoutManager(new GridLayoutManager(getDialogActivity(), getCount()));
+        if (!itemStyleApplied) {
+            itemStyleApplied = true;
+            binding.recycler.addOnChildAttachStateChangeListener(new RecyclerView.OnChildAttachStateChangeListener() {
+                @Override
+                public void onChildViewAttachedToWindow(@NonNull View view) {
+                    applyItemStyle(view);
+                }
+
+                @Override
+                public void onChildViewDetachedFromWindow(@NonNull View view) {
+                }
+            });
+        }
+    }
+
+    private void applyItemStyle(View view) {
+        view.setFocusable(true);
+        view.setFocusableInTouchMode(true);
+        view.setClickable(true);
+        TextView text = view.findViewById(R.id.text);
+        if (text == null) return;
+        text.setTextColor(Color.rgb(32, 33, 36));
+        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        text.setClickable(false);
+        text.setFocusable(false);
+        text.setFocusableInTouchMode(false);
+        text.setEnabled(true);
     }
 
     private void setRecyclerHeight() {
