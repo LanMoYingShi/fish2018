@@ -47,6 +47,19 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
+        <com.fongmi.android.tv.ui.custom.FullscreenMiniProgressBar
+            android:id="@+id/miniProgress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="3dp"
+            android:layout_gravity="bottom"
+            android:indeterminate="false"
+            android:max="1000"
+            android:progress="0"
+            android:progressBackgroundTint="#33000000"
+            android:progressTint="#2196F3"
+            android:visibility="gone" />
+
     </FrameLayout>
 
     <com.google.android.material.textview.MaterialTextView
