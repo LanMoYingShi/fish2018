@@ -38,7 +38,12 @@
     </style>
 
     <style name="Video" />
-
+        <style name="Video.ContextText">
+        <item name="android:shadowColor">@color/black_0</item>
+        <item name="android:shadowDx">0</item>
+        <item name="android:shadowDy">0</item>
+        <item name="android:shadowRadius">0</item>
+    </style>
    
 
     <style name="Theme.WebHTV.LightDialog" parent="Theme.Material3.Light.Dialog.Alert">
