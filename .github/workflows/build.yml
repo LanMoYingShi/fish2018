@@ -22,6 +22,8 @@ permissions:
 
 env:
   GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8
+  ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-download: "false"
+  ORG_GRADLE_PROJECT_org.gradle.java.installations.auto-detect: "true"
 
 jobs:
   build-release:
@@ -61,6 +63,15 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: gradle
+
+      - name: Configure Gradle Java toolchain
+        shell: bash
+        run: |
+          echo "org.gradle.java.installations.auto-download=false" >> gradle.properties
+          echo "org.gradle.java.installations.paths=$JAVA_HOME" >> gradle.properties
+          echo "JAVA_HOME=$JAVA_HOME"
+          "$JAVA_HOME/bin/java" -version
+          grep -E 'org.gradle.java.installations' gradle.properties
 
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
