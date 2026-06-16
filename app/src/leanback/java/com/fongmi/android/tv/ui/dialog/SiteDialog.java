@@ -32,7 +32,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickListener {
 
-    private static final int GRID_COUNT = 3;
+    private static final int GRID_COUNT = 1;
     private static final String TAG = "site_dialog";
     private static final int ITEM_HEIGHT = 46;
     private static final int ITEM_SPACE = 12;
@@ -75,7 +75,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     }
 
     private float getWidth() {
-        return action ? 0.92f : 0.9f;
+        return action ? 0.55f : 0.5f;
     }
 
     @Override
@@ -163,7 +163,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
         if (binding.recycler.getAdapter() == null) binding.recycler.setAdapter(adapter);
         binding.recycler.setHasFixedSize(true);
         binding.recycler.setItemAnimator(null);
-        if (decoration == null) binding.recycler.addItemDecoration(decoration = new SpaceItemDecoration(getCount(), 16));
+        if (decoration == null) binding.recycler.addItemDecoration(decoration = new SpaceItemDecoration(getCount(), ITEM_SPACE));
         if (binding.recycler.getLayoutManager() == null) binding.recycler.setLayoutManager(new GridLayoutManager(getDialogActivity(), getCount()));
     }
 
