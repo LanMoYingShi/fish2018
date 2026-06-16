@@ -172,14 +172,6 @@ public class Setting {
         Prefers.put("web_home_extension", extension);
     }
 
-    public static boolean isPlaybackArtworkWall() {
-        return Prefers.getBoolean("playback_artwork_wall", true);
-    }
-
-    public static void putPlaybackArtworkWall(boolean artworkWall) {
-        Prefers.put("playback_artwork_wall", artworkWall);
-    }
-
     public static boolean isDebugLog() {
         return DebugLogStore.isEnabled();
     }

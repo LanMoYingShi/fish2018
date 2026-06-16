@@ -736,7 +736,6 @@ public class HomeWebController {
                     playUrl:(url,title,options)=>invoke('player.playUrl',Object.assign({},options||{},{url,title})),
                     playVod:(siteKey,vodId,title,pic,options)=>invoke('player.playVod',Object.assign({},options||{},{siteKey,vodId,title,pic})),
                     playVodInline:(payload)=>invoke('player.playVodInline',payload||{}),
-                    preloadArtwork:(pic,wallPic)=>invoke('player.preloadArtwork',{pic,wallPic}),
                     control:(action)=>invoke('player.control',{action}),
                     status:()=>invoke('player.status',{})
                   };
@@ -790,7 +789,6 @@ public class HomeWebController {
                     play:player.playUrl,
                     vod:player.playVod,
                     vodInline:player.playVodInline,
-                    preloadArtwork:player.preloadArtwork,
                     ctrl:player.control,
                     stat:player.status,
                     search:window.fongmi.app.search,

@@ -23,7 +23,6 @@
     activeClass: "active",
     titleSelector: "h1,h2,.title,.video-title",
     posterSelector: ".poster img,.video-pic img",
-    backdropSelector: ".backdrop img,.banner img,.cover img,.video-backdrop img",
     buttonText: "App播放",
     buttonClass: "fm-inline-play"
   };
@@ -84,11 +83,6 @@
     return el ? absoluteUrl(el.currentSrc || el.src || el.getAttribute("data-src")) : "";
   }
 
-  function backdrop() {
-    const el = document.querySelector(CONFIG.backdropSelector);
-    return el ? absoluteUrl(el.currentSrc || el.src || el.getAttribute("data-src")) : "";
-  }
-
   // ---------- resolver ----------
 
   // Receives one episode object from the episodes array (deep copy).
@@ -130,15 +124,11 @@
       return;
     }
     const active = episodes.filter(function (item) { return item.active; })[0];
-    const pic = poster();
-    const wallPic = backdrop();
-    if (sdk.preloadArtwork) sdk.preloadArtwork(pic, wallPic).catch(function () {});
     log("vodInline", episodes.length, "episodes, mark=", active && active.name);
     await sdk.vodInline({
       vod_id: location.pathname,
       vod_name: title(),
-      vod_pic: pic,
-      wallPic: wallPic,
+      vod_pic: poster(),
       vod_play_from: "WebHome",
       mark: active ? active.name : "",
       episodes: episodes

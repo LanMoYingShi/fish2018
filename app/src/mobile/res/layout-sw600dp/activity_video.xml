@@ -11,13 +11,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <com.fongmi.android.tv.ui.custom.ContextWallImageView
-            android:id="@+id/contextWall"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:importantForAccessibility="no"
-            android:visibility="gone" />
-
         <View
             android:id="@+id/statusBar"
             android:layout_width="match_parent"
@@ -65,7 +58,6 @@
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/name"
-            style="@style/Video.ContextText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignTop="@+id/video"
@@ -79,7 +71,6 @@
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/remark"
-            style="@style/Video.ContextText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_below="@+id/name"
@@ -93,7 +84,6 @@
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/site"
-            style="@style/Video.ContextText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_below="@+id/remark"
@@ -107,7 +97,6 @@
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/other"
-            style="@style/Video.ContextText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_below="@+id/site"
@@ -121,7 +110,6 @@
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/director"
-            style="@style/Video.ContextText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_below="@+id/other"
@@ -135,7 +123,6 @@
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/actor"
-            style="@style/Video.ContextText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_below="@+id/director"
@@ -170,7 +157,6 @@
                     android:paddingBottom="8dp">
 
                     <com.google.android.material.textview.MaterialTextView
-                        style="@style/Video.ContextText"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="16dp"
@@ -193,7 +179,6 @@
 
                     <com.google.android.material.textview.MaterialTextView
                         android:id="@+id/quality_text"
-                        style="@style/Video.ContextText"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="16dp"
@@ -228,7 +213,6 @@
                         android:gravity="center_vertical">
 
                         <com.google.android.material.textview.MaterialTextView
-                            style="@style/Video.ContextText"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/detail_episode"
@@ -281,7 +265,6 @@
                         android:orientation="vertical">
 
                         <com.google.android.material.textview.MaterialTextView
-                            style="@style/Video.ContextText"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="16dp"
@@ -293,7 +276,6 @@
 
                         <com.google.android.material.textview.MaterialTextView
                             android:id="@+id/content"
-                            style="@style/Video.ContextText"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="16dp"
