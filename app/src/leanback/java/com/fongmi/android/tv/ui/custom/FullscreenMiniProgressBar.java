@@ -39,6 +39,7 @@ public class FullscreenMiniProgressBar extends View {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         removeCallbacks(ticker);
+        post(this::arrangeOverlayOrder);
         post(ticker);
     }
 
@@ -68,7 +69,7 @@ public class FullscreenMiniProgressBar extends View {
         long duration = player == null ? C.TIME_UNSET : player.getDuration();
         long position = player == null ? 0 : Math.max(0, player.getCurrentPosition());
 
-        if (!isFullscreen() || isControlVisible() || player == null || duration <= 0 || duration == C.TIME_UNSET) {
+        if (!isFullscreen() || player == null || duration <= 0 || duration == C.TIME_UNSET) {
             setVisibility(GONE);
         } else {
             progress = (int) Math.min(MAX, position * MAX / duration);
@@ -78,14 +79,16 @@ public class FullscreenMiniProgressBar extends View {
         postDelayed(ticker, 1000);
     }
 
+    private void arrangeOverlayOrder() {
+        View control = getRootView() == null ? null : getRootView().findViewById(R.id.control);
+        View progress = getRootView() == null ? null : getRootView().findViewById(R.id.progress);
+        if (control != null) control.bringToFront();
+        if (progress != null) progress.bringToFront();
+    }
+
     private Player getPlayer() {
         PlayerView playerView = getRootView() == null ? null : getRootView().findViewById(R.id.exo);
         return playerView == null ? null : playerView.getPlayer();
-    }
-
-    private boolean isControlVisible() {
-        View control = getRootView() == null ? null : getRootView().findViewById(R.id.control);
-        return control != null && control.getVisibility() == VISIBLE;
     }
 
     private boolean isFullscreen() {
