@@ -51,7 +51,7 @@ public class FullscreenMiniProgressBar extends View {
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int width = MeasureSpec.getSize(widthMeasureSpec);
-        setMeasuredDimension(width, ResUtil.dp2px(2));
+        setMeasuredDimension(width, ResUtil.dp2px(1));
     }
 
     @Override
