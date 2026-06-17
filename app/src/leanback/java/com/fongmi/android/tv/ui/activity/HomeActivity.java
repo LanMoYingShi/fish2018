@@ -110,8 +110,8 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     private String webDefaultChromeMode = TV_FULL;
     private boolean webToolbarVisible = true;
     private boolean loadingHomeCategory;
-    private int mCategory = -1;
-    private int mPendingCategory = -1;
+    private int mEntered = -1;
+    private int mPendingType = -1;
 
     private Site getHome() {
         return VodConfig.get().getHome();
@@ -182,6 +182,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
             @Override
             public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
                 updateToolbarVisibility(isTopRow(position));
+                if (parent.hasFocus()) mEntered = -1;
                 if (mPresenter.isDelete()) setHistoryDelete(false);
             }
         });
@@ -190,7 +191,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
             public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
                 if (child == null || !parent.hasFocus()) return;
                 updateToolbarVisibility(true);
-                onTypeSelected(position);
+                onTypeFocused(position);
             }
         });
     }
@@ -405,8 +406,8 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         mResult = Result.empty();
         mHomeResult = Result.empty();
         loadingHomeCategory = false;
-        mCategory = -1;
-        App.post(mCategoryRunnable, -1);
+        mEntered = -1;
+        App.post(mEnterRunnable, -1);
         clearRecommendRows();
         mAdapter.add("progress");
         mViewModel.homeContent();
@@ -436,7 +437,6 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
             Class type = result.getTypes().get(0);
             SpiderDebug.log("home", "home list empty, auto open first category key=%s tid=%s", getHome().getKey(), type.getTypeId());
             loadingHomeCategory = true;
-            mCategory = 0;
             mAdapter.add("progress");
             mViewModel.categoryContent(getHome().getKey(), type.getTypeId(), "1", true, new java.util.HashMap<>());
             return;
@@ -453,28 +453,22 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         if (mAdapter.size() > index) mAdapter.removeItems(index, mAdapter.size() - index);
     }
 
-    private void onTypeSelected(int position) {
-        if (position < 0 || position >= mTypeAdapter.getItemCount() || position == mCategory) return;
-        mPendingCategory = position;
-        App.post(mCategoryRunnable, 100);
+    private void onTypeFocused(int position) {
+        if (position < 0 || position >= mTypeAdapter.getItemCount() || position == mEntered) return;
+        mPendingType = position;
+        App.post(mEnterRunnable, 150);
     }
 
-    private final Runnable mCategoryRunnable = new Runnable() {
+    private final Runnable mEnterRunnable = new Runnable() {
         @Override
         public void run() {
-            loadCategory(mPendingCategory);
+            int position = mPendingType;
+            if (position < 0 || position >= mTypeAdapter.getItemCount()) return;
+            if (mBinding.typeRecycler.getVisibility() != View.VISIBLE || !mBinding.typeRecycler.hasFocus()) return;
+            mEntered = position;
+            onItemClick(mTypeAdapter.get(position));
         }
     };
-
-    private void loadCategory(int position) {
-        if (position < 0 || position >= mTypeAdapter.getItemCount() || mBinding.typeRecycler.getVisibility() != View.VISIBLE) return;
-        Class type = mTypeAdapter.get(position);
-        mCategory = position;
-        loadingHomeCategory = true;
-        clearRecommendRows();
-        mAdapter.add("progress");
-        mViewModel.categoryContent(getHome().getKey(), type.getTypeId(), "1", true, new java.util.HashMap<>());
-    }
 
     private void addGrid(List<Vod> items, Style style) {
         List<ListRow> rows = new ArrayList<>();
