@@ -33,11 +33,11 @@
         android:gravity="center"
         android:singleLine="true"
         android:textColor="@color/selector_site_dialog_control"
-        android:textSize="14sp"
+        android:textSize="16sp"
         app:backgroundTint="@color/selector_site_dialog_button"
-        app:cornerRadius="4dp"
+        app:cornerRadius="8dp"
         app:strokeColor="@color/selector_site_dialog_stroke"
-        tools:text="泥巴" />
+        tools:text="Site" />
 
     <com.google.android.material.checkbox.MaterialCheckBox
         android:id="@+id/check"
