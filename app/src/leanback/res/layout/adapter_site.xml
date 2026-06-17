@@ -35,7 +35,7 @@
         android:textColor="@color/selector_site_dialog_control"
         android:textSize="16sp"
         app:backgroundTint="@color/selector_site_dialog_button"
-        app:cornerRadius="8dp"
+        app:cornerRadius="46dp"
         app:strokeColor="@color/selector_site_dialog_stroke"
         tools:text="Site" />
 
