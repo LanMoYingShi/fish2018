@@ -51,6 +51,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     private long showStart;
     private boolean action;
     private boolean itemStyleApplied;
+    private int focusIndex = -1;
     private int type;
 
     public static SiteDialog create() {
@@ -147,6 +148,21 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
         setType(type);
         setRecyclerView();
         setMode();
+        setHome();
+    }
+
+    private void setHome() {
+        int index = adapter.getItems().indexOf(VodConfig.get().getHome());
+        if (index < 0) return;
+        focusIndex = index;
+        binding.recycler.scrollToPosition(index);
+        binding.recycler.post(() -> {
+            if (binding == null || focusIndex < 0) return;
+            RecyclerView.ViewHolder holder = binding.recycler.findViewHolderForAdapterPosition(focusIndex);
+            if (holder == null) return;
+            focusIndex = -1;
+            holder.itemView.requestFocus();
+        });
     }
 
     @Override
@@ -184,6 +200,10 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
                 @Override
                 public void onChildViewAttachedToWindow(@NonNull View view) {
                     applyItemStyle(view);
+                    if (focusIndex >= 0 && binding != null && binding.recycler.getChildAdapterPosition(view) == focusIndex) {
+                        focusIndex = -1;
+                        view.requestFocus();
+                    }
                 }
 
                 @Override
