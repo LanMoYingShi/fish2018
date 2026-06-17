@@ -40,6 +40,11 @@ public class EpisodeHoriHolder extends BaseEpisodeHolder {
 
             // 长按显示详细信息对话框
             binding.card.setOnLongClickListener(v -> {
+                // 手机版暂不支持详细信息对话框,使用简单弹窗
+                String title = item.getDesc().concat(item.getDisplayName());
+                return com.fongmi.android.tv.ui.custom.EpisodeTitlePopup.show(v, title);
+
+                /* TV版才有EpisodeDetailDialog,手机版暂不支持
                 if (tmdbEpisode.getTmdbId() > 0) {
                     android.app.Activity activity = getActivity(v);
                     if (activity != null) {
@@ -51,6 +56,7 @@ public class EpisodeHoriHolder extends BaseEpisodeHolder {
                     String title = item.getDesc().concat(item.getDisplayName());
                     return com.fongmi.android.tv.ui.custom.EpisodeTitlePopup.show(v, title);
                 }
+                */
             });
 
             // 标题
@@ -105,6 +111,7 @@ public class EpisodeHoriHolder extends BaseEpisodeHolder {
         return null;
     }
 
+    /* TV版才有EpisodeDetailDialog,手机版暂不支持此功能
     private void fetchEpisodePhotosAndShowDialog(android.app.Activity activity, com.fongmi.android.tv.bean.TmdbEpisode episode) {
         // 先显示对话框（空剧照列表）
         java.util.List<String> photos = new java.util.ArrayList<>();
@@ -137,5 +144,6 @@ public class EpisodeHoriHolder extends BaseEpisodeHolder {
             }),
             com.fongmi.android.tv.utils.Task.executor());
     }
+    */
 }
 
