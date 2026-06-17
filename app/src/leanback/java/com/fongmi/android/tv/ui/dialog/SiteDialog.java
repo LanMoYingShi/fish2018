@@ -1,10 +1,8 @@
 package com.fongmi.android.tv.ui.dialog;
 
 import android.app.Dialog;
-import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
-import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -40,6 +38,9 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     private static final int ITEM_HEIGHT = 46;
     private static final int ITEM_SPACE = 12;
     private static final int MAX_HEIGHT = 344;
+    private static final int WIDTH = 440;
+    private static final int ACTION_WIDTH = 520;
+    private static final int WINDOW_EXTRA = 32;
 
     private RecyclerView.ItemDecoration decoration;
     private DialogSiteBinding binding;
@@ -79,7 +80,15 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     }
 
     private float getWidth() {
-        return action ? 0.42f : 0.38f;
+        return getWindowWidth() / (float) ResUtil.getScreenWidth();
+    }
+
+    private int getContentWidth() {
+        return ResUtil.dp2px(action ? ACTION_WIDTH : WIDTH);
+    }
+
+    private int getWindowWidth() {
+        return getContentWidth() + ResUtil.dp2px(WINDOW_EXTRA);
     }
 
     @Override
@@ -190,8 +199,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
         view.setClickable(true);
         TextView text = view.findViewById(R.id.text);
         if (text == null) return;
-        text.setTextColor(Color.rgb(32, 33, 36));
-        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        text.setDuplicateParentStateEnabled(true);
         text.setClickable(false);
         text.setFocusable(false);
         text.setFocusableInTouchMode(false);
@@ -209,7 +217,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     private void setRootWidth() {
         ViewGroup.LayoutParams params = binding.getRoot().getLayoutParams();
         if (params == null) params = new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.width = (int) (ResUtil.getScreenWidth() * getWidth());
+        params.width = getContentWidth();
         binding.getRoot().setLayoutParams(params);
     }
 
@@ -226,6 +234,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     }
 
     private void setWidth() {
+        setRootWidth();
         setWidth(getWidth());
     }
 
@@ -269,10 +278,11 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
 
     private void applyWindow(Window window) {
         if (window == null) return;
+        window.getDecorView().setPadding(0, 0, 0, 0);
         window.setWindowAnimations(0);
-        window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        window.setBackgroundDrawable(new ColorDrawable(android.graphics.Color.TRANSPARENT));
         WindowManager.LayoutParams params = window.getAttributes();
-        params.width = (int) (ResUtil.getScreenWidth() * getWidth());
+        params.width = getWindowWidth();
         params.height = WindowManager.LayoutParams.WRAP_CONTENT;
         window.setAttributes(params);
     }

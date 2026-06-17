@@ -2,6 +2,5 @@
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:color="#1A73E8" android:state_focused="true" />
     <item android:color="#1A73E8" android:state_selected="true" />
-    <item android:color="#5F6368" android:state_enabled="false" />
-    <item android:color="#202124" />
+    <item android:color="#DADCE0" />
 </selector>
