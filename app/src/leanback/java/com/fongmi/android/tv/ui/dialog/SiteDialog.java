@@ -38,9 +38,9 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     private static final int ITEM_HEIGHT = 46;
     private static final int ITEM_SPACE = 12;
     private static final int MAX_HEIGHT = 344;
-    private static final int WIDTH = 440;
-    private static final int ACTION_WIDTH = 520;
-    private static final int WINDOW_EXTRA = 32;
+    private static final int WIDTH = 308;
+    private static final int ACTION_WIDTH = 364;
+    private static final int WINDOW_EXTRA = 24;
 
     private RecyclerView.ItemDecoration decoration;
     private DialogSiteBinding binding;
