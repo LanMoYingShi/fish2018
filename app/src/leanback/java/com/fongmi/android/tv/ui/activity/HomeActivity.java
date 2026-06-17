@@ -194,6 +194,14 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
                 onTypeFocused(position);
             }
         });
+        mBinding.getRoot().getViewTreeObserver().addOnGlobalFocusChangeListener((oldFocus, newFocus) -> {
+            if (isTypeChild(newFocus) && !isTypeChild(oldFocus)) onTypeFocused(mBinding.typeRecycler.getSelectedPosition());
+        });
+    }
+
+    private boolean isTypeChild(View view) {
+        for (android.view.ViewParent p = view == null ? null : view.getParent(); p != null; p = p.getParent()) if (p == mBinding.typeRecycler) return true;
+        return false;
     }
 
     private void updateToolbarVisibility(boolean visible) {
