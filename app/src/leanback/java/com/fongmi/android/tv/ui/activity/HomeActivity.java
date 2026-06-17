@@ -111,7 +111,6 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     private boolean webToolbarVisible = true;
     private boolean loadingHomeCategory;
     private int mEntered = -1;
-    private int mPendingType = -1;
 
     private Site getHome() {
         return VodConfig.get().getHome();
@@ -189,19 +188,9 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         mBinding.typeRecycler.addOnChildViewHolderSelectedListener(new OnChildViewHolderSelectedListener() {
             @Override
             public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
-                if (child == null || !parent.hasFocus()) return;
-                updateToolbarVisibility(true);
-                onTypeFocused(position);
+                if (child != null && parent.hasFocus()) updateToolbarVisibility(true);
             }
         });
-        mBinding.getRoot().getViewTreeObserver().addOnGlobalFocusChangeListener((oldFocus, newFocus) -> {
-            if (isTypeChild(newFocus) && !isTypeChild(oldFocus)) onTypeFocused(mBinding.typeRecycler.getSelectedPosition());
-        });
-    }
-
-    private boolean isTypeChild(View view) {
-        for (android.view.ViewParent p = view == null ? null : view.getParent(); p != null; p = p.getParent()) if (p == mBinding.typeRecycler) return true;
-        return false;
     }
 
     private void updateToolbarVisibility(boolean visible) {
@@ -437,6 +426,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
             return;
         }
         mTypeAdapter.addAll(result.getTypes());
+        mBinding.typeRecycler.setSelectedPosition(0);
         mBinding.typeRecycler.setVisibility(View.VISIBLE);
     }
 
@@ -461,18 +451,12 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         if (mAdapter.size() > index) mAdapter.removeItems(index, mAdapter.size() - index);
     }
 
-    private void onTypeFocused(int position) {
-        if (position < 0 || position >= mTypeAdapter.getItemCount() || position == mEntered) return;
-        mPendingType = position;
-        App.post(mEnterRunnable, 150);
-    }
-
     private final Runnable mEnterRunnable = new Runnable() {
         @Override
         public void run() {
-            int position = mPendingType;
-            if (position < 0 || position >= mTypeAdapter.getItemCount()) return;
             if (mBinding.typeRecycler.getVisibility() != View.VISIBLE || !mBinding.typeRecycler.hasFocus()) return;
+            int position = mBinding.typeRecycler.getSelectedPosition();
+            if (position < 0 || position >= mTypeAdapter.getItemCount() || position == mEntered) return;
             mEntered = position;
             onItemClick(mTypeAdapter.get(position));
         }
@@ -734,6 +718,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
             if (mWeb.dispatchKeyEvent(event)) return true;
             return super.dispatchKeyEvent(event);
         }
+        if (KeyUtil.isActionDown(event) && ((mBinding.recycler.hasFocus() && KeyUtil.isUpKey(event) && mBinding.typeRecycler.getVisibility() == View.VISIBLE) || (mBinding.typeRecycler.hasFocus() && (KeyUtil.isLeftKey(event) || KeyUtil.isRightKey(event))))) App.post(mEnterRunnable, 150);
         if (KeyUtil.isActionDown(event) & KeyUtil.isUpKey(event) && mBinding.typeRecycler.hasFocus()) return requestTitleFocus();
         if (KeyUtil.isActionDown(event) & KeyUtil.isDownKey(event) && mBinding.typeRecycler.hasFocus()) return requestContentFocus();
         if (KeyUtil.isActionDown(event) & KeyUtil.isUpKey(event) && mBinding.recycler.hasFocus() && mBinding.typeRecycler.getVisibility() == View.VISIBLE) updateToolbarVisibility(true);
