@@ -124,6 +124,10 @@
     <string name="setting_danmaku">彈幕設定</string>
     <string name="setting_enhance">增強功能</string>
     <string name="setting_search_thread">搜尋線程</string>
+    <string name="setting_personal">個性設定</string>
+    <string name="setting_search_ui">搜尋佈局</string>
+    <string name="setting_search_column">搜尋結果列數</string>
+    <string name="setting_site_column">站點展示模式</string>
     <string name="repo_github">GitHub 倉庫</string>
     <string name="repo_cnb">CNB 倉庫</string>
     <string name="setting_debug_log">調試日誌</string>
@@ -693,5 +697,16 @@
     <string name="detail_no_overview">暫無簡介</string>
     <string name="detail_image_rotate">旋轉</string>
     <string name="tmdb_external_links_label">外部連結</string>
+
+    <string-array name="select_search_column">
+        <item>自適應</item>
+        <item>1個</item>
+        <item>2個</item>
+    </string-array>
+
+    <string-array name="select_site_column">
+        <item>單行</item>
+        <item>雙行</item>
+    </string-array>
 
 </resources>

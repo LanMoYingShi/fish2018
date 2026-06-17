@@ -143,6 +143,7 @@
     <string name="setting_search_thread">Search threads</string>
     <string name="setting_search_ui">Search layout</string>
     <string name="setting_search_column">Search results per row</string>
+    <string name="setting_site_column">Site display mode</string>
     <string name="repo_github">GitHub repository</string>
     <string name="repo_cnb">CNB repository</string>
     <string name="setting_debug_log">Debug log</string>
@@ -716,6 +717,11 @@
         <item>Auto</item>
         <item>1 item</item>
         <item>2 items</item>
+    </string-array>
+
+    <string-array name="select_site_column">
+        <item>Single row</item>
+        <item>Double row</item>
     </string-array>
 
     <string-array name="select_scale">

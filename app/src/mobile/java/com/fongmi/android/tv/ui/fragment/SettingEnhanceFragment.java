@@ -42,7 +42,6 @@ public class SettingEnhanceFragment extends BaseFragment {
 
     private static final String URL_GITHUB = "https://github.com/fish2018/webhtv";
     private static final String URL_CNB = "https://cnb.cool/fish2018/ext";
-    private static final int[] SEARCH_THREADS = {1, 2, 4, 6, 8, 10, 12, 16, 20, 32};
 
     private FragmentSettingEnhanceBinding mBinding;
 
@@ -77,7 +76,6 @@ public class SettingEnhanceFragment extends BaseFragment {
             }
             return false;
         });
-        mBinding.searchThread.setOnClickListener(this::setSearchThread);
         mBinding.driveCheck.setOnClickListener(this::setDriveCheck);
         mBinding.audioSource.setOnClickListener(this::setAudioSource);
         mBinding.shortDramaSource.setOnClickListener(this::setShortDramaSource);
@@ -102,7 +100,6 @@ public class SettingEnhanceFragment extends BaseFragment {
     }
 
     private void setText() {
-        mBinding.searchThreadText.setText(String.valueOf(Setting.getSearchThread()));
         mBinding.driveCheckText.setText(getSwitch(Setting.isDriveCheck()));
         mBinding.audioSourceText.setText(getSwitch(!AudioConfig.objectFrom(Setting.getAudioConfig()).getDisplayRules().isEmpty()));
         mBinding.shortDramaSourceText.setText(getSwitch(!ShortDramaConfig.objectFrom(Setting.getShortDramaConfig()).getDisplayRules().isEmpty()));
@@ -127,13 +124,6 @@ public class SettingEnhanceFragment extends BaseFragment {
     private void setDriveCheck(View view) {
         Setting.putDriveCheck(!Setting.isDriveCheck());
         mBinding.driveCheckText.setText(getSwitch(Setting.isDriveCheck()));
-    }
-
-    private void setSearchThread(View view) {
-        int index = 0;
-        for (int i = 0; i < SEARCH_THREADS.length; i++) if (SEARCH_THREADS[i] == Setting.getSearchThread()) index = i;
-        Setting.putSearchThread(SEARCH_THREADS[(index + 1) % SEARCH_THREADS.length]);
-        setText();
     }
 
     private void setDebugLog(View view) {
