@@ -17,6 +17,7 @@ import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -33,6 +34,7 @@ import com.bumptech.glide.request.target.Target;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.utils.KeyUtil;
 import com.fongmi.android.tv.utils.Notify;
+import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.TmdbImageSaver;
 import com.fongmi.android.tv.utils.Util;
 import com.google.android.material.button.MaterialButton;
@@ -107,16 +109,20 @@ public class PhotoViewerDialog {
             saveBtnWrapper.setFocusable(true);
             saveBtnWrapper.setFocusableInTouchMode(true);
             saveBtnWrapper.setClickable(true);
-            saveBtnWrapper.setForeground(ContextCompat.getDrawable(activity, R.drawable.selector_tmdb_card));
+            saveBtnWrapper.setBackground(ContextCompat.getDrawable(activity, R.drawable.selector_photo_viewer_save));
             saveBtnWrapper.setStateListAnimator(null);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) saveBtnWrapper.setDefaultFocusHighlightEnabled(false);
+        } else {
+            saveBtnWrapper.setBackground(ContextCompat.getDrawable(activity, R.drawable.selector_photo_viewer_save));
         }
+        saveBtnWrapper.setPadding(ResUtil.dp2px(22), ResUtil.dp2px(12), ResUtil.dp2px(22), ResUtil.dp2px(12));
 
-        MaterialButton saveBtn = new MaterialButton(activity);
+        TextView saveBtn = new TextView(activity);
         saveBtn.setText(R.string.detail_image_save);
         saveBtn.setTextColor(Color.WHITE);
-        saveBtn.setBackgroundColor(0x80000000);
-        saveBtn.setPadding(32, 16, 32, 16);
+        saveBtn.setTextSize(18);
+        saveBtn.setGravity(Gravity.CENTER);
+        saveBtn.setIncludeFontPadding(false);
         saveBtn.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         saveBtnWrapper.addView(saveBtn);
 
@@ -131,14 +137,10 @@ public class PhotoViewerDialog {
                 }
             }
         };
-        if (Util.isLeanback()) {
-            saveBtnWrapper.setOnClickListener(saveAction);
-            saveBtn.setClickable(false);
-            saveBtn.setFocusable(false);
-            saveBtn.setFocusableInTouchMode(false);
-        } else {
-            saveBtn.setOnClickListener(saveAction);
-        }
+        saveBtnWrapper.setOnClickListener(saveAction);
+        saveBtn.setClickable(false);
+        saveBtn.setFocusable(false);
+        saveBtn.setFocusableInTouchMode(false);
         root.addView(saveBtnWrapper);
 
         // 左上角旋转按钮 - 仅非TV版显示
