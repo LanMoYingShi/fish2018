@@ -68,15 +68,6 @@
     <string name="play_switch_site">Switching site to <xliff:g name="name">%s</xliff:g></string>
     <string name="play_switch_parse">Switching parse to <xliff:g name="name">%s</xliff:g></string>
 
-    <!-- Control -->
-    <string name="control_display">Display</string>
-    <string name="display_time">Time</string>
-    <string name="display_traffic">Speed</string>
-    <string name="display_size">Resolution</string>
-    <string name="display_progress">Progress</string>
-    <string name="display_mini">Mini</string>
-    <string name="display_title">Title</string>
-
     <!-- Danmaku Setting -->
     <string name="danmaku">Danmaku</string>
     <string name="danmaku_select">Select danmaku</string>

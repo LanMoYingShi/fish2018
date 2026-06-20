@@ -10,10 +10,8 @@ import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.databinding.FragmentSettingPersonalBinding;
-import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseFragment;
-import com.fongmi.android.tv.ui.dialog.DisplayDialog;
 
 public class SettingPersonalFragment extends BaseFragment {
 
@@ -49,7 +47,6 @@ public class SettingPersonalFragment extends BaseFragment {
         mBinding.searchUi.setOnClickListener(this::setSearchUi);
         mBinding.searchColumn.setOnClickListener(this::setSearchColumn);
         mBinding.siteColumn.setOnClickListener(this::setSiteColumn);
-        mBinding.display.setOnClickListener(this::onDisplay);
     }
 
     private void setText() {
@@ -58,7 +55,6 @@ public class SettingPersonalFragment extends BaseFragment {
         mBinding.searchUiText.setText((searchUi = getResources().getStringArray(R.array.select_search_ui))[Setting.getSearchUi()]);
         mBinding.searchColumnText.setText(getSearchColumnText());
         mBinding.siteColumnText.setText((siteColumn = getResources().getStringArray(R.array.select_site_column))[Setting.getSiteColumn() - 1]);
-        mBinding.displayText.setText(getDisplayText());
     }
 
     private String getSearchColumnText() {
@@ -68,23 +64,6 @@ public class SettingPersonalFragment extends BaseFragment {
             return searchColumn[column];
         }
         return searchColumn[0];
-    }
-
-    private String getDisplayText() {
-        StringBuilder builder = new StringBuilder();
-        addDisplay(builder, PlayerSetting.isDisplayTime(), R.string.display_time);
-        addDisplay(builder, PlayerSetting.isDisplayTraffic(), R.string.display_traffic);
-        addDisplay(builder, PlayerSetting.isDisplaySize(), R.string.display_size);
-        addDisplay(builder, PlayerSetting.isDisplayProgress(), R.string.display_progress);
-        addDisplay(builder, PlayerSetting.isDisplayMini(), R.string.display_mini);
-        addDisplay(builder, PlayerSetting.isDisplayTitle(), R.string.display_title);
-        return builder.length() == 0 ? getString(R.string.setting_off) : builder.toString();
-    }
-
-    private void addDisplay(StringBuilder builder, boolean selected, int resId) {
-        if (!selected) return;
-        if (builder.length() > 0) builder.append(" / ");
-        builder.append(getString(resId));
     }
 
     private void setSearchThread(View view) {
@@ -115,10 +94,6 @@ public class SettingPersonalFragment extends BaseFragment {
     private void setSiteColumn(View view) {
         Setting.putSiteColumn(Setting.getSiteColumn() == 1 ? 2 : 1);
         setText();
-    }
-
-    private void onDisplay(View view) {
-        DisplayDialog.show(requireActivity(), this::setText);
     }
 
     @Override

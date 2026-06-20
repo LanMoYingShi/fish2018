@@ -68,15 +68,6 @@
     <string name="play_switch_site">正在切换站源至「<xliff:g name="name">%s</xliff:g>」</string>
     <string name="play_switch_parse">正在切换解析至「<xliff:g name="name">%s</xliff:g>」</string>
 
-    <!-- Control -->
-    <string name="control_display">屏显</string>
-    <string name="display_time">时间</string>
-    <string name="display_traffic">网速</string>
-    <string name="display_size">分辨率</string>
-    <string name="display_progress">进度</string>
-    <string name="display_mini">最小化</string>
-    <string name="display_title">标题</string>
-
     <!-- Danmaku Setting -->
     <string name="danmaku">弹幕</string>
     <string name="danmaku_select">选择弹幕</string>

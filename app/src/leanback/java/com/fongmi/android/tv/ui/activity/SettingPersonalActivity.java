@@ -11,10 +11,8 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.HomeButton;
 import com.fongmi.android.tv.databinding.ActivitySettingPersonalBinding;
 import com.fongmi.android.tv.event.RefreshEvent;
-import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
-import com.fongmi.android.tv.ui.dialog.DisplayDialog;
 import com.fongmi.android.tv.ui.dialog.HomeButtonDialog;
 import com.fongmi.android.tv.ui.dialog.HomeMenuKeyDialog;
 
@@ -59,7 +57,6 @@ public class SettingPersonalActivity extends BaseActivity {
         mBinding.searchThread.setOnClickListener(this::setSearchThread);
         // mBinding.searchUi.setOnClickListener(this::setSearchUi); // 暂不支持横向/纵向布局切换
         // mBinding.searchColumn.setOnClickListener(this::setSearchColumn); // 在搜索页面切换更方便
-        mBinding.display.setOnClickListener(this::onDisplay);
     }
 
     private void setText() {
@@ -72,7 +69,6 @@ public class SettingPersonalActivity extends BaseActivity {
         mBinding.searchThreadText.setText(String.valueOf(Setting.getSearchThread()));
         // mBinding.searchUiText.setText((searchUi = getResources().getStringArray(R.array.select_search_ui))[Setting.getSearchUi()]); // 暂不支持
         // mBinding.searchColumnText.setText(getSearchColumnText()); // 在搜索页面切换更方便
-        mBinding.displayText.setText(getDisplayText());
     }
 
     private String getSearchColumnText() {
@@ -82,23 +78,6 @@ public class SettingPersonalActivity extends BaseActivity {
             return searchColumn[column];
         }
         return searchColumn[0]; // 默认返回第一项
-    }
-
-    private String getDisplayText() {
-        StringBuilder builder = new StringBuilder();
-        addDisplay(builder, PlayerSetting.isDisplayTime(), R.string.display_time);
-        addDisplay(builder, PlayerSetting.isDisplayTraffic(), R.string.display_traffic);
-        addDisplay(builder, PlayerSetting.isDisplaySize(), R.string.display_size);
-        addDisplay(builder, PlayerSetting.isDisplayProgress(), R.string.display_progress);
-        addDisplay(builder, PlayerSetting.isDisplayMini(), R.string.display_mini);
-        addDisplay(builder, PlayerSetting.isDisplayTitle(), R.string.display_title);
-        return builder.length() == 0 ? getString(R.string.setting_off) : builder.toString();
-    }
-
-    private void addDisplay(StringBuilder builder, boolean selected, int resId) {
-        if (!selected) return;
-        if (builder.length() > 0) builder.append(" / ");
-        builder.append(getString(resId));
     }
 
     private void setHomeVodAutoLoad(View view) {
@@ -155,7 +134,4 @@ public class SettingPersonalActivity extends BaseActivity {
     }
     */
 
-    private void onDisplay(View view) {
-        DisplayDialog.show(this, this::setText);
-    }
 }

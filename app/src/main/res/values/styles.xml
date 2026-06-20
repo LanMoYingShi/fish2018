@@ -85,17 +85,4 @@
         <item name="android:focusable">true</item>
     </style>
 
-    <style name="DisplayControl" parent="Control">
-        <item name="android:layout_marginEnd">6dp</item>
-        <item name="android:layout_marginBottom">6dp</item>
-        <item name="android:background">@drawable/selector_display_option</item>
-        <item name="android:gravity">center</item>
-        <item name="android:minHeight">36dp</item>
-        <item name="android:minWidth">56dp</item>
-        <item name="android:paddingStart">12dp</item>
-        <item name="android:paddingEnd">12dp</item>
-        <item name="android:textColor">@color/display_option_text</item>
-        <item name="android:textSize">14sp</item>
-    </style>
-
 </resources>

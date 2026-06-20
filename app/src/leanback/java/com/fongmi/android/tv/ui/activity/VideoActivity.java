@@ -77,7 +77,6 @@ import com.fongmi.android.tv.ui.custom.CustomSeekView;
 import com.fongmi.android.tv.ui.custom.PlayerOsdController;
 import com.fongmi.android.tv.ui.dialog.ContentDialog;
 import com.fongmi.android.tv.ui.dialog.DanmakuDialog;
-import com.fongmi.android.tv.ui.dialog.DisplayDialog;
 import com.fongmi.android.tv.ui.dialog.EpisodeDialog;
 import com.fongmi.android.tv.ui.dialog.SubtitleDialog;
 import com.fongmi.android.tv.ui.dialog.TitleDialog;
@@ -90,7 +89,6 @@ import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Sniffer;
 import com.fongmi.android.tv.utils.Task;
-import com.fongmi.android.tv.utils.Traffic;
 import com.fongmi.android.tv.utils.Util;
 import com.github.catvod.crawler.SpiderDebug;
 import com.github.bassaer.library.MDColor;
@@ -99,8 +97,6 @@ import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
 import java.io.File;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -112,7 +108,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private static final int SHORT_DRAMA_SCALE = 0; // 0=原始(适合TV), 4=裁剪(适合手机)
     private static final int TMDB_DETAIL_LOAD_TIMEOUT = 8000;
     private static final int OMDB_FULL_RATING_TEXT_MAX_LENGTH = 20;
-    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.getDefault());
 
     private ActivityVideoBinding mBinding;
     private ViewGroup.LayoutParams mFrameParams;
@@ -143,7 +138,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private boolean episodeGridMode;
     private Runnable mR1;
     private Runnable mR2;
-    private Runnable mR3;
     private Runnable mTmdbDetailTimeout;
     private boolean mTmdbDetailLoading;
     private boolean mTmdbDetailRevealed;
@@ -414,7 +408,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBroken = new ArrayList<>();
         mR1 = this::hideControl;
         mR2 = this::updateFocus;
-        mR3 = this::setTraffic;
         mR4 = this::showEmpty;
         SpiderDebug.log("video-flow", "initView state ready cost=%dms", System.currentTimeMillis() - start);
         checkCast();
@@ -466,10 +459,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.control.action.speed.setOnClickListener(view -> onSpeed());
         mBinding.control.action.reset.setOnClickListener(view -> onReset());
         mBinding.control.action.title.setOnClickListener(view -> onTitle());
-        mBinding.control.action.display.setOnClickListener(view -> onDisplay());
         mBinding.control.action.player.setOnClickListener(view -> onPlayerKernel());
         mBinding.control.action.player.setOnLongClickListener(view -> onChooseLong());
-        mBinding.control.action.display.setOnClickListener(view -> onDisplay());
         mBinding.control.action.decode.setOnClickListener(view -> onDecode());
         mBinding.control.action.ending.setOnClickListener(view -> onEnding());
         mBinding.control.action.repeat.setOnClickListener(view -> onRepeat());
@@ -1505,28 +1496,18 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         else showControl(getFocus2());
     }
 
-    private void onDisplay() {
-        DisplayDialog.show(this, this::updateDisplaySettings);
-    }
-
     private void onEpisodes() {
         EpisodeDialog.create().episodes(mEpisodeAdapter.getItems()).reverseAction(this::onRevSort).show(this);
     }
 
     private void showProgress() {
         mBinding.progress.getRoot().setVisibility(View.VISIBLE);
-        updateProgressPanel();
-        updateDisplayPanel();
-        App.post(mR3, 0);
         hideCenter();
         hideError();
     }
 
     private void hideProgress() {
         mBinding.progress.getRoot().setVisibility(View.GONE);
-        App.removeCallbacks(mR3);
-        Traffic.reset();
-        updateDisplayPanel();
     }
 
     private void showError(String text) {
@@ -1545,7 +1526,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.widget.center.setVisibility(View.VISIBLE);
         mBinding.widget.duration.setText(player().getDurationTime());
         mBinding.widget.position.setText(player().getPositionTime(0));
-        updateDisplayPanel();
     }
 
     private void showTopInfo() {
@@ -1556,7 +1536,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void hideInfo() {
         mBinding.widget.top.setVisibility(View.GONE);
         mBinding.widget.center.setVisibility(View.GONE);
-        updateDisplayPanel();
     }
 
     private void showControl(View view) {
@@ -1564,78 +1543,18 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.control.getRoot().setVisibility(View.VISIBLE);
         view.requestFocus();
         setR1Callback();
-        updateDisplayPanel();
     }
 
     private void hideControl() {
         mBinding.control.getRoot().setVisibility(View.GONE);
         if (player().isPlaying()) mBinding.widget.top.setVisibility(View.GONE);
         App.removeCallbacks(mR1);
-        updateDisplayPanel();
     }
 
     private void hideCenter() {
         mBinding.widget.action.setImageResource(R.drawable.ic_widget_play);
         mBinding.widget.center.setVisibility(View.GONE);
         if (isGone(mBinding.control.getRoot())) mBinding.widget.top.setVisibility(View.GONE);
-    }
-
-    private void setTraffic() {
-        updateProgressPanel();
-        if (PlayerSetting.isDisplayTraffic()) Traffic.setSpeed(mBinding.progress.traffic);
-        App.post(mR3, 1000);
-    }
-
-    private void updateDisplaySettings() {
-        updateProgressPanel();
-        updateDisplayPanel();
-    }
-
-    private void updateProgressPanel() {
-        boolean hasPlayer = service() != null && player() != null && !player().isEmpty();
-        boolean showTitle = PlayerSetting.isDisplayTitle() && !TextUtils.isEmpty(mBinding.widget.title.getText());
-        boolean showSize = hasPlayer && PlayerSetting.isDisplaySize() && !TextUtils.isEmpty(player().getSizeText());
-        mBinding.progress.title.setText(mBinding.widget.title.getText());
-        mBinding.progress.size.setText(showSize ? player().getSizeText() : "");
-        mBinding.progress.title.setVisibility(showTitle ? View.VISIBLE : View.GONE);
-        mBinding.progress.size.setVisibility(showSize ? View.VISIBLE : View.GONE);
-        mBinding.progress.topLeft.setVisibility(showTitle || showSize ? View.VISIBLE : View.GONE);
-        mBinding.progress.clock.setText(TIME_FORMAT.format(LocalDateTime.now()));
-        mBinding.progress.clock.setVisibility(PlayerSetting.isDisplayTime() ? View.VISIBLE : View.GONE);
-        mBinding.progress.bottomProgress.setVisibility(hasPlayer && PlayerSetting.isDisplayProgress() ? View.VISIBLE : View.GONE);
-        mBinding.progress.traffic.setVisibility(PlayerSetting.isDisplayTraffic() ? View.VISIBLE : View.GONE);
-        if (!hasPlayer) return;
-        long position = Math.max(0, player().getPosition());
-        long duration = Math.max(0, player().getDuration());
-        mBinding.progress.position.setText(player().getPositionTime(0) + "/" + player().getDurationTime());
-        mBinding.progress.bar.setProgress(duration > 0 ? (int) (position * mBinding.progress.bar.getMax() / duration) : 0);
-    }
-
-    private void updateDisplayPanel() {
-        boolean hasPlayer = service() != null && player() != null && !player().isEmpty();
-        boolean canShow = hasPlayer && isGone(mBinding.control.getRoot()) && isGone(mBinding.progress.getRoot()) && isGone(mBinding.widget.center) && isGone(mBinding.widget.error);
-        boolean showTitle = canShow && PlayerSetting.isDisplayTitle() && !TextUtils.isEmpty(mBinding.widget.title.getText());
-        boolean showSize = canShow && PlayerSetting.isDisplaySize() && !TextUtils.isEmpty(player().getSizeText());
-        boolean showProgress = canShow && PlayerSetting.isDisplayProgress() && player().getDuration() > 0;
-        boolean showMini = !showProgress && canShow && PlayerSetting.isDisplayMini() && player().getDuration() > 0;
-        mBinding.widget.displayTitle.setText(mBinding.widget.title.getText());
-        mBinding.widget.displaySize.setText(showSize ? player().getSizeText() : "");
-        mBinding.widget.displayTitle.setVisibility(showTitle ? View.VISIBLE : View.GONE);
-        mBinding.widget.displaySize.setVisibility(showSize ? View.VISIBLE : View.GONE);
-        mBinding.widget.displayTopLeft.setVisibility(showTitle || showSize ? View.VISIBLE : View.GONE);
-        mBinding.widget.displayClock.setText(TIME_FORMAT.format(LocalDateTime.now()));
-        mBinding.widget.displayClock.setVisibility(canShow && PlayerSetting.isDisplayTime() ? View.VISIBLE : View.GONE);
-        if (canShow && PlayerSetting.isDisplayTraffic()) Traffic.setSpeed(mBinding.widget.displayTraffic);
-        else mBinding.widget.displayTraffic.setVisibility(View.GONE);
-        mBinding.widget.displayBottomProgress.setVisibility(showProgress ? View.VISIBLE : View.GONE);
-        mBinding.widget.displayMini.setVisibility(showMini ? View.VISIBLE : View.GONE);
-        if (!showProgress && !showMini) return;
-        long duration = Math.max(0, player().getDuration());
-        long position = Math.max(0, Math.min(player().getPosition(), duration));
-        int progress = duration > 0 ? (int) (position * mBinding.widget.displayBar.getMax() / duration) : 0;
-        mBinding.widget.displayPosition.setText(player().getPositionTime(0) + "/" + player().getDurationTime());
-        mBinding.widget.displayBar.setProgress(progress);
-        mBinding.widget.displayMini.setProgress(progress);
     }
 
     private void setR1Callback() {
@@ -2904,7 +2823,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         DanmakuApi.cancel();
         stopBackdropAutoScroll();
         RefreshEvent.keep();
-        App.removeCallbacks(mR1, mR2, mR3, mR4);
+        App.removeCallbacks(mR1, mR2, mR4);
         App.removeCallbacks(mTmdbDetailTimeout);
         if (mOsd != null) mOsd.release();
         mViewModel.getResult().removeObserver(mObserveDetail);
