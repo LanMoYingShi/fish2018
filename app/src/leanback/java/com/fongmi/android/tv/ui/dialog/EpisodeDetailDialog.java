@@ -10,13 +10,14 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.FragmentActivity;
 
 import com.bumptech.glide.Glide;
-import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Episode;
 import com.fongmi.android.tv.bean.TmdbConfig;
 import com.fongmi.android.tv.bean.TmdbEpisode;
 import com.fongmi.android.tv.service.TmdbService;
 import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.ui.adapter.EpisodePhotoAdapter;
+import com.fongmi.android.tv.utils.ResUtil;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.gson.JsonObject;
 
@@ -48,11 +49,11 @@ public class EpisodeDetailDialog {
 
         // 加载剧照 - 使用原图
         if (!tmdbEpisode.getStillUrl().isEmpty()) {
-            String originalUrl = tmdbEpisode.getStillUrl().replace("/w300/", "/original/");
             Glide.with(activity)
-                    .load(originalUrl)
+                    .load(tmdbImageUrl(tmdbEpisode.getStillUrl(), "original"))
                     .placeholder(R.color.black)
                     .error(R.color.black)
+                    .fitCenter()
                     .into(still);
             still.setVisibility(View.VISIBLE);
         } else {
@@ -102,10 +103,10 @@ public class EpisodeDetailDialog {
         loadEpisodePhotos(activity, tmdbEpisode, photosLabel, photosGrid);
 
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(activity)
-                .setView(view)
-                .setNegativeButton("关闭", (dialog, which) -> dialog.dismiss());
+                .setView(view);
 
         AlertDialog alertDialog = builder.create();
+        alertDialog.show();
 
         // 设置全屏显示，不透明背景
         if (alertDialog.getWindow() != null) {
@@ -115,13 +116,6 @@ public class EpisodeDetailDialog {
             );
             // 使用纯色背景（布局中已有半透明黑色背景）
             alertDialog.getWindow().setBackgroundDrawableResource(android.R.color.black);
-        }
-
-        alertDialog.show();
-
-        // 设置按钮的焦点效果 - 让"关闭"按钮有明显的焦点边框
-        if (alertDialog.getButton(AlertDialog.BUTTON_NEGATIVE) != null) {
-            alertDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setBackgroundResource(R.drawable.selector_item);
         }
     }
 
@@ -169,11 +163,12 @@ public class EpisodeDetailDialog {
                     activity.runOnUiThread(() -> {
                         photosLabel.setVisibility(View.VISIBLE);
                         photosGrid.setVisibility(View.VISIBLE);
+                        photosGrid.setHorizontalSpacing(ResUtil.dp2px(12));
+                        photosGrid.setRowHeight(ResUtil.dp2px(124));
 
-                        com.fongmi.android.tv.ui.adapter.EpisodePhotoAdapter photoAdapter =
-                            new com.fongmi.android.tv.ui.adapter.EpisodePhotoAdapter(photos);
+                        EpisodePhotoAdapter photoAdapter = new EpisodePhotoAdapter(photos,
+                                (url, position) -> PhotoViewerDialog.show(activity, photos, position, null));
                         photosGrid.setAdapter(photoAdapter);
-                        photosGrid.setHorizontalSpacing(com.fongmi.android.tv.utils.ResUtil.dp2px(12));
 
                         android.util.Log.d("EpisodeDetail", "图片显示成功");
                     });
@@ -185,5 +180,11 @@ public class EpisodeDetailDialog {
                 android.util.Log.e("EpisodeDetail", "加载图片失败", e);
             }
         }).start();
+    }
+
+    private static String tmdbImageUrl(String url, String size) {
+        if (url == null || url.isEmpty()) return "";
+        String result = url.replaceFirst("(/t/p/)([^/]+)(/)", "$1" + size + "$3");
+        return result.equals(url) ? url.replaceFirst("/(w\\d+|h\\d+|original)/", "/" + size + "/") : result;
     }
 }

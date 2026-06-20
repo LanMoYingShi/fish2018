@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.ui.adapter;
 
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 
@@ -9,6 +10,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.utils.ResUtil;
 
 import java.util.List;
 
@@ -18,40 +20,43 @@ import java.util.List;
 public class EpisodePhotoAdapter extends RecyclerView.Adapter<EpisodePhotoAdapter.ViewHolder> {
 
     private final List<String> mPhotos;
+    private final OnClickListener mListener;
     private final int photoWidth = 220;  // dp
     private final int photoHeight = 124; // dp (16:9)
 
+    public interface OnClickListener {
+        void onItemClick(String url, int position);
+    }
+
     public EpisodePhotoAdapter(List<String> photos) {
+        this(photos, null);
+    }
+
+    public EpisodePhotoAdapter(List<String> photos, OnClickListener listener) {
         this.mPhotos = photos;
+        this.mListener = listener;
     }
 
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        ImageView imageView = new ImageView(parent.getContext());
-        imageView.setLayoutParams(new ViewGroup.LayoutParams(
-            com.fongmi.android.tv.utils.ResUtil.dp2px(photoWidth),
-            com.fongmi.android.tv.utils.ResUtil.dp2px(photoHeight)
-        ));
-        imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        imageView.setFocusable(true);
-        imageView.setFocusableInTouchMode(true);
-        imageView.setBackgroundResource(R.drawable.selector_item);
-        return new ViewHolder(imageView);
+        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.adapter_tmdb_photo, parent, false);
+        return new ViewHolder(view);
     }
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         String photoUrl = mPhotos.get(position);
-
-        // 使用原图
-        String originalUrl = photoUrl.replace("/w300/", "/original/");
-
         Glide.with(holder.imageView.getContext())
-            .load(originalUrl)
-            .placeholder(R.color.black)
-            .error(R.color.black)
-            .into(holder.imageView);
+                .load(tmdbImageUrl(photoUrl, "w780"))
+                .placeholder(R.color.black)
+                .error(R.color.black)
+                .centerCrop()
+                .override(ResUtil.dp2px(photoWidth), ResUtil.dp2px(photoHeight))
+                .into(holder.imageView);
+        holder.itemView.setOnClickListener(v -> {
+            if (mListener != null) mListener.onItemClick(photoUrl, position);
+        });
     }
 
     @Override
@@ -62,9 +67,15 @@ public class EpisodePhotoAdapter extends RecyclerView.Adapter<EpisodePhotoAdapte
     static class ViewHolder extends RecyclerView.ViewHolder {
         ImageView imageView;
 
-        ViewHolder(@NonNull ImageView itemView) {
+        ViewHolder(@NonNull View itemView) {
             super(itemView);
-            this.imageView = itemView;
+            this.imageView = itemView.findViewById(R.id.photo);
         }
+    }
+
+    private static String tmdbImageUrl(String url, String size) {
+        if (url == null || url.isEmpty()) return "";
+        String result = url.replaceFirst("(/t/p/)([^/]+)(/)", "$1" + size + "$3");
+        return result.equals(url) ? url.replaceFirst("/(w\\d+|h\\d+|original)/", "/" + size + "/") : result;
     }
 }
