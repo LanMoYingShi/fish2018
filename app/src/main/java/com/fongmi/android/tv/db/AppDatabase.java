@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.db;
 
 import android.content.Context;
+import android.text.TextUtils;
 
 import androidx.room.Database;
 import androidx.room.Room;
@@ -22,6 +23,7 @@ import com.fongmi.android.tv.db.dao.KeepDao;
 import com.fongmi.android.tv.db.dao.LiveDao;
 import com.fongmi.android.tv.db.dao.SiteDao;
 import com.fongmi.android.tv.db.dao.TrackDao;
+import com.fongmi.android.tv.utils.BackupFiles;
 import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.Formatters;
 import com.fongmi.android.tv.utils.Task;
@@ -38,6 +40,7 @@ public abstract class AppDatabase extends RoomDatabase {
     public static final int VERSION = 36;
     public static final String NAME = "tv";
     public static final String SYMBOL = "@@@";
+    private static final int BACKUP_KEEP_COUNT = 7;
 
     private static volatile AppDatabase instance;
 
@@ -52,7 +55,7 @@ public abstract class AppDatabase extends RoomDatabase {
 
     public static void backup(com.fongmi.android.tv.impl.Callback callback) {
         Task.execute(() -> {
-            File file = new File(Path.tv(), "tv-" + LocalDate.now().format(Formatters.DATE) + ".bk");
+            File file = new File(Path.tv(), getBackupName());
             Backup backup = Backup.create();
             if (backup.getConfig().isEmpty()) {
                 App.post(callback::error);
@@ -63,6 +66,21 @@ public abstract class AppDatabase extends RoomDatabase {
                 cleanOld();
             }
         });
+    }
+
+    private static String getBackupName() {
+        return BackupFiles.getCurrentDevicePrefix(getOwnerId()) + LocalDate.now().format(Formatters.DATE) + ".bk";
+    }
+
+    private static String getOwnerId() {
+        Device device = Device.get();
+        String uuid = safeName(device.getUuid());
+        if (uuid.length() > 6) uuid = uuid.substring(uuid.length() - 6);
+        return TextUtils.isEmpty(uuid) ? "me" : uuid;
+    }
+
+    private static String safeName(String text) {
+        return text == null ? "" : text.trim().replaceAll("[\\\\/:*?\"<>|\\s]+", "-").replaceAll("^-+|-+$", "");
     }
 
     public static void restore(File file, com.fongmi.android.tv.impl.Callback callback) {
@@ -82,11 +100,12 @@ public abstract class AppDatabase extends RoomDatabase {
 
     private static void cleanOld() {
         List<File> items = new ArrayList<>();
+        String ownerId = getOwnerId();
         File[] files = Path.tv().listFiles();
         if (files == null) files = new File[0];
-        for (File file : files) if (file.getName().startsWith("tv") && file.getName().endsWith(".bk.gz")) items.add(file);
+        for (File file : files) if (BackupFiles.isCurrentDeviceBackup(file, ownerId)) items.add(file);
         if (!items.isEmpty()) items.sort((f1, f2) -> Long.compare(f2.lastModified(), f1.lastModified()));
-        if (items.size() > 7) for (int i = 7; i < items.size(); i++) Path.clear(items.get(i));
+        if (items.size() > BACKUP_KEEP_COUNT) for (int i = BACKUP_KEEP_COUNT; i < items.size(); i++) Path.clear(items.get(i));
     }
 
     private static AppDatabase create(Context context) {
