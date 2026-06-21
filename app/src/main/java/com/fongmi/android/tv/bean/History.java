@@ -12,6 +12,7 @@ import androidx.room.PrimaryKey;
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.Constant;
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.api.SiteApi;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.db.AppDatabase;
 import com.fongmi.android.tv.impl.Diffable;
@@ -33,6 +34,8 @@ public class History implements Diffable<History> {
     private String key;
     @SerializedName("vodPic")
     private String vodPic;
+    @SerializedName("wallPic")
+    private String wallPic;
     @SerializedName("vodName")
     private String vodName;
     @SerializedName("vodFlag")
@@ -77,6 +80,7 @@ public class History implements Diffable<History> {
         History item = new History();
         item.key = key;
         item.vodPic = vodPic;
+        item.wallPic = wallPic;
         item.vodName = vodName;
         item.vodFlag = vodFlag;
         item.vodRemarks = vodRemarks;
@@ -132,6 +136,10 @@ public class History implements Diffable<History> {
 
     public static void sync(List<History> targets) {
         targets.forEach(target -> {
+            if (!target.canMergeByName()) {
+                target.cid(VodConfig.getCid()).save();
+                return;
+            }
             List<History> items = findByName(target.getVodName());
             if (items.isEmpty()) target.cid(VodConfig.getCid()).save();
             else {
@@ -156,6 +164,14 @@ public class History implements Diffable<History> {
 
     public void setVodPic(String vodPic) {
         this.vodPic = vodPic;
+    }
+
+    public String getWallPic() {
+        return wallPic == null ? "" : wallPic;
+    }
+
+    public void setWallPic(String wallPic) {
+        this.wallPic = wallPic;
     }
 
     public String getVodName() {
@@ -311,7 +327,16 @@ public class History implements Diffable<History> {
         return isRevPlay() ? R.string.play_backward_hint : R.string.play_forward_hint;
     }
 
+    private boolean isPushHistory() {
+        return key != null && key.startsWith(SiteApi.PUSH + AppDatabase.SYMBOL);
+    }
+
+    private boolean canMergeByName() {
+        return !isPushHistory();
+    }
+
     private boolean shouldMerge(History item, boolean force) {
+        if (!canMergeByName() || !item.canMergeByName()) return false;
         if (!force && getKey().equals(item.getKey())) return false;
         if (getDuration() <= 0 || item.getDuration() <= 0) return true;
         return Math.abs(getDuration() - item.getDuration()) <= TimeUnit.MINUTES.toMillis(10);
@@ -338,6 +363,7 @@ public class History implements Diffable<History> {
     }
 
     private History merge(boolean force) {
+        if (!canMergeByName()) return this;
         return merge(findByName(getVodName()), force);
     }
 
@@ -371,6 +397,7 @@ public class History implements Diffable<History> {
         if (flags.isEmpty()) return;
         setVodFlag(flags.get(0).getFlag());
         if (!flags.get(0).getEpisodes().isEmpty()) setVodRemarks(flags.get(0).getEpisodes().get(0).getName());
+        if (!canMergeByName()) return;
         for (History item : findByName(getVodName())) {
             if (getPosition() > 0) break;
             for (Flag flag : flags) {
@@ -410,6 +437,6 @@ public class History implements Diffable<History> {
 
     @Override
     public boolean isSameContent(History other) {
-        return getVodName().equals(other.getVodName()) && getVodPic().equals(other.getVodPic()) && getCreateTime() == other.getCreateTime();
+        return getVodName().equals(other.getVodName()) && getVodPic().equals(other.getVodPic()) && getWallPic().equals(other.getWallPic()) && getCreateTime() == other.getCreateTime();
     }
 }

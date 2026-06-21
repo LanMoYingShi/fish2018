@@ -142,6 +142,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private boolean fullscreen;
     private boolean initAuto;
     private boolean autoMode;
+    private boolean revealManualSearch;
     private boolean useParse;
     private boolean rotate;
     private boolean detailHealthRecorded;
@@ -185,7 +186,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     public static void cast(Activity activity, History history) {
-        start(activity, history.getSiteKey(), history.getVodId(), history.getVodName(), history.getVodPic());
+        start(activity, history.getSiteKey(), history.getVodId(), history.getVodName(), history.getVodPic(), null, history.getWallPic());
     }
 
     public static void collect(Activity activity, String key, String id, String name, String pic) {
@@ -444,6 +445,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     protected void initEvent() {
         mBinding.name.setOnClickListener(view -> onName());
         mBinding.more.setOnClickListener(view -> onMore());
+        mBinding.search.setOnClickListener(view -> onSearch());
         mBinding.actor.setOnClickListener(view -> onActor());
         mBinding.content.setOnClickListener(view -> onContent());
         mBinding.reverse.setOnClickListener(view -> onReverse());
@@ -608,6 +610,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void getDetail(Vod item) {
+        revealManualSearch = false;
+        if (!isAutoMode()) mViewModel.stopSearch();
         getIntent().putExtra("key", item.getSiteKey());
         getIntent().putExtra("pic", item.getPic());
         getIntent().putExtra("id", item.getId());
@@ -893,6 +897,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     @Override
     public void onItemClick(Vod item) {
         setAutoMode(false);
+        applySearchArtwork(item);
         getDetail(item);
     }
 
@@ -944,6 +949,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         String name = mBinding.name.getText().toString();
         Notify.show(getString(R.string.detail_search, name));
         initSearch(name, false);
+    }
+
+    private void onSearch() {
+        onName();
     }
 
     private void onMore() {
@@ -1387,7 +1396,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private String getContextWall() {
-        return getWallPic();
+        if (!TextUtils.isEmpty(getWallPic())) return getWallPic();
+        return mHistory == null ? "" : mHistory.getWallPic();
     }
 
     private String lockContextWall(String url) {
@@ -1460,6 +1470,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void checkHistory(Vod item) {
         mHistory = History.find(getHistoryKey());
         mHistory = mHistory == null ? createHistory(item) : mHistory;
+        if (!TextUtils.isEmpty(getWallPic())) mHistory.setWallPic(getWallPic());
         if (!TextUtils.isEmpty(getMark())) mHistory.setVodRemarks(getMark());
         if (Setting.isIncognito() && mHistory.getKey().equals(getHistoryKey())) mHistory.delete();
         mBinding.control.action.opening.setText(mHistory.getOpening() <= 0 ? getString(R.string.play_op) : Util.timeMs(mHistory.getOpening()));
@@ -1480,6 +1491,17 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         return shouldKeepPushArtwork() ? getPic() : item.getPic();
     }
 
+    private void applySearchArtwork(Vod item) {
+        String pic = getSearchArtworkPic();
+        if (!TextUtils.isEmpty(pic)) item.setPic(pic);
+    }
+
+    private String getSearchArtworkPic() {
+        if (!TextUtils.isEmpty(getPic())) return getPic();
+        if (mHistory != null && !TextUtils.isEmpty(mHistory.getVodPic())) return mHistory.getVodPic();
+        return "";
+    }
+
     private boolean hasInitialPreview() {
         return !getName().isEmpty() || !getPic().isEmpty() || !getWallPic().isEmpty();
     }
@@ -1496,6 +1518,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         history.setKey(getHistoryKey());
         history.setCid(VodConfig.getCid());
         history.setVodName(item.getName());
+        history.setVodPic(getInitialArtwork(item));
+        history.setWallPic(getWallPic());
         history.findEpisode(item.getFlags());
         return history;
     }
@@ -1863,6 +1887,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void startFlow() {
+        if (!PlayerSetting.isAutoChange()) return;
         if (!getSite().isChangeable()) return;
         if (isUseParse()) checkParse();
         else checkFlag();
@@ -1889,6 +1914,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void checkSearch(boolean force) {
+        if (!force && !PlayerSetting.isAutoChange()) return;
         if (mQuickAdapter.isEmpty()) initSearch(mBinding.name.getText().toString(), true);
         else if (isAutoMode() || force) nextSite();
     }
@@ -1896,6 +1922,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void initSearch(String keyword, boolean auto) {
         setAutoMode(auto);
         setInitAuto(auto);
+        revealManualSearch = !auto;
         startSearch(keyword);
     }
 
@@ -1917,7 +1944,11 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         items.removeIf(this::mismatch);
         mBinding.quick.setVisibility(View.VISIBLE);
         mQuickAdapter.addAll(items);
-        if (isInitAuto()) nextSite();
+        if (revealManualSearch && !items.isEmpty()) {
+            revealManualSearch = false;
+            mBinding.quick.post(() -> mBinding.scroll.smoothScrollTo(0, mBinding.quick.getTop()));
+        }
+        if (isInitAuto() && PlayerSetting.isAutoChange()) nextSite();
         if (items.isEmpty()) return;
         App.removeCallbacks(mR4);
     }
@@ -1950,6 +1981,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mQuickAdapter.remove(position);
         mBroken.add(getId());
         setInitAuto(false);
+        applySearchArtwork(item);
         getDetail(item);
     }
 

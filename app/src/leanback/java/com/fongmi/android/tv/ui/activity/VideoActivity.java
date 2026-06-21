@@ -133,6 +133,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private boolean fullscreen;
     private boolean initAuto;
     private boolean autoMode;
+    private boolean revealManualSearch;
     private boolean useParse;
     private boolean detailRequested;
     private boolean detailHealthRecorded;
@@ -176,7 +177,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     public static void cast(Activity activity, History history) {
-        start(activity, history.getSiteKey(), history.getVodId(), history.getVodName(), history.getVodPic(), null, false, true);
+        start(activity, history.getSiteKey(), history.getVodId(), history.getVodName(), history.getVodPic(), null, false, true, null, history.getWallPic());
     }
 
     public static void collect(Activity activity, String key, String id, String name, String pic) {
@@ -441,6 +442,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     @SuppressLint("ClickableViewAccessibility")
     protected void initEvent() {
         mBinding.keep.setOnClickListener(view -> onKeep());
+        mBinding.search.setOnClickListener(view -> onSearch());
         mBinding.video.setOnClickListener(view -> onVideo());
         mBinding.change1.setOnClickListener(view -> onChange());
         mBinding.tmdbRematch.setOnClickListener(view -> showManualTmdbMatchDialog());
@@ -609,6 +611,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void getDetail(Vod item) {
+        revealManualSearch = false;
+        if (!isAutoMode()) mViewModel.stopSearch();
         getIntent().putExtra("key", item.getSiteKey());
         getIntent().putExtra("pic", item.getPic());
         getIntent().putExtra("id", item.getId());
@@ -1303,6 +1307,12 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         ContentDialog.create().content(mBinding.content.getTag().toString()).show(this);
     }
 
+    private void onSearch() {
+        String keyword = mBinding.name.getText().toString();
+        if (TextUtils.isEmpty(keyword)) return;
+        initSearch(keyword, false);
+    }
+
     private void onKeep() {
         Keep keep = Keep.find(getHistoryKey());
         Notify.show(keep != null ? R.string.keep_del : R.string.keep_add);
@@ -1616,7 +1626,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private String getContextWall() {
-        return getWallPic();
+        if (!TextUtils.isEmpty(getWallPic())) return getWallPic();
+        return mHistory == null ? "" : mHistory.getWallPic();
     }
 
     private String lockContextWall(String url) {
@@ -1694,6 +1705,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void checkHistory(Vod item) {
         mHistory = History.find(getHistoryKey());
         mHistory = mHistory == null ? createHistory(item) : mHistory;
+        if (!TextUtils.isEmpty(getWallPic())) mHistory.setWallPic(getWallPic());
         if (!TextUtils.isEmpty(getMark())) mHistory.setVodRemarks(getMark());
         if (Setting.isIncognito() && mHistory.getKey().equals(getHistoryKey())) mHistory.delete();
         mBinding.control.action.opening.setText(mHistory.getOpening() <= 0 ? getString(R.string.play_op) : Util.timeMs(mHistory.getOpening()));
@@ -1715,6 +1727,17 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         return shouldKeepPushArtwork() ? getPic() : item.getPic();
     }
 
+    private void applySearchArtwork(Vod item) {
+        String pic = getSearchArtworkPic();
+        if (!TextUtils.isEmpty(pic)) item.setPic(pic);
+    }
+
+    private String getSearchArtworkPic() {
+        if (!TextUtils.isEmpty(getPic())) return getPic();
+        if (mHistory != null && !TextUtils.isEmpty(mHistory.getVodPic())) return mHistory.getVodPic();
+        return "";
+    }
+
     private boolean hasInitialPreview() {
         return !getName().isEmpty() || !getPic().isEmpty() || !getWallPic().isEmpty();
     }
@@ -1732,6 +1755,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         history.setKey(getHistoryKey());
         history.setCid(VodConfig.getCid());
         history.setVodName(item.getName());
+        history.setVodPic(getInitialArtwork(item));
+        history.setWallPic(getWallPic());
         history.findEpisode(item.getFlags());
         return history;
     }
@@ -2603,6 +2628,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void startFlow() {
+        if (!PlayerSetting.isAutoChange()) return;
         if (!getSite().isChangeable()) return;
         if (isUseParse()) checkParse();
         else checkFlag();
@@ -2629,6 +2655,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void checkSearch(boolean force) {
+        if (!force && !PlayerSetting.isAutoChange()) return;
         if (mQuickAdapter.getItemCount() == 0) initSearch(mBinding.name.getText().toString(), true);
         else if (isAutoMode() || force) nextSite();
     }
@@ -2636,6 +2663,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void initSearch(String keyword, boolean auto) {
         setAutoMode(auto);
         setInitAuto(auto);
+        revealManualSearch = !auto;
         startSearch(keyword);
         mBinding.part.setTag(keyword);
     }
@@ -2657,8 +2685,12 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         List<Vod> items = result.getList();
         items.removeIf(this::mismatch);
         mQuickAdapter.addAll(items);
-        mBinding.quick.setVisibility(View.GONE);
-        if (isInitAuto()) nextSite();
+        mBinding.quick.setVisibility(isInitAuto() ? View.GONE : View.VISIBLE);
+        if (revealManualSearch && !items.isEmpty()) {
+            revealManualSearch = false;
+            mBinding.quick.post(() -> mBinding.quick.requestFocus());
+        }
+        if (isInitAuto() && PlayerSetting.isAutoChange()) nextSite();
         if (items.isEmpty()) return;
         App.removeCallbacks(mR4);
     }
@@ -2666,6 +2698,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     @Override
     public void onItemClick(Vod item) {
         setAutoMode(false);
+        applySearchArtwork(item);
         getDetail(item);
     }
 
@@ -2697,6 +2730,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mQuickAdapter.remove(position);
         mBroken.add(getId());
         setInitAuto(false);
+        applySearchArtwork(item);
         getDetail(item);
     }
 

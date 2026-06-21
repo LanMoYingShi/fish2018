@@ -7,6 +7,7 @@ import androidx.fragment.app.FragmentActivity;
 import com.fongmi.android.tv.impl.UpdateListener;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.dialog.UpdateDialog;
+import com.fongmi.android.tv.utils.AppVersion;
 import com.fongmi.android.tv.utils.Download;
 import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.Github;
@@ -24,6 +25,7 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private final Download download;
     private UpdateDialog dialog;
+    private boolean force;
 
     private Updater() {
         this.download = Download.create(getApk(), getFile());
@@ -38,7 +40,7 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     private String getJson() {
-        return Github.getJson(BuildConfig.FLAVOR_mode);
+        return Github.getJson(BuildConfig.FLAVOR_mode + "-" + BuildConfig.FLAVOR_abi);
     }
 
     private String getApk() {
@@ -46,6 +48,7 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     public Updater force() {
+        force = true;
         Notify.show(R.string.update_check);
         Setting.putUpdate(true);
         return this;
@@ -62,10 +65,14 @@ public class Updater implements Download.Callback, UpdateListener {
             String name = object.optString("name");
             String desc = object.optString("desc");
             int code = object.optInt("code");
-            if (code <= BuildConfig.VERSION_CODE) return;
+            if (code < BuildConfig.VERSION_CODE || code == BuildConfig.VERSION_CODE && AppVersion.isCurrent(name)) {
+                if (force) App.post(() -> Notify.show(R.string.update_latest));
+                return;
+            }
             App.post(() -> show(activity, name, desc));
         } catch (Exception e) {
             e.printStackTrace();
+            if (force) App.post(() -> Notify.show(R.string.update_failed));
         }
     }
 
@@ -77,6 +84,7 @@ public class Updater implements Download.Callback, UpdateListener {
     @Override
     public void onConfirm(View view) {
         view.setEnabled(false);
+        if (dialog != null) dialog.setProgress(0);
         download.start(this);
     }
 

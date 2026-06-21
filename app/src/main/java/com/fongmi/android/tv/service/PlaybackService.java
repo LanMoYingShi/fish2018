@@ -93,6 +93,17 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
         return player;
     }
 
+    private String serviceState() {
+        return "running=" + running +
+                " player=" + (player != null && !player.isReleased()) +
+                " key=" + (player == null || player.isReleased() ? null : player.getKey()) +
+                " callbacks=" + playerCallbacks.size() +
+                " external=" + externalBound +
+                " navigation=" + (navigationCallback != null) +
+                " navigationKey=" + navigationKey +
+                " session=" + (session != null);
+    }
+
     private boolean hasNavigationCallback() {
         return navigationCallback != null;
     }
@@ -140,6 +151,7 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        SpiderDebug.log("playback-lifecycle", "service startCommand action=%s flags=%d startId=%d %s", intent == null ? null : intent.getAction(), flags, startId, serviceState());
         if (intent != null) handleAction(intent.getAction());
         return super.onStartCommand(intent, flags, startId);
     }
@@ -165,6 +177,7 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
 
     @Override
     public IBinder onBind(Intent intent) {
+        SpiderDebug.log("playback-lifecycle", "service bind action=%s local=%s external=%s %s", intent == null ? null : intent.getAction(), isLocalBind(intent), isExternalBind(intent), serviceState());
         if (isLocalBind(intent)) return binder;
         if (isExternalBind(intent)) externalBound = true;
         return super.onBind(intent);
@@ -172,24 +185,29 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
 
     @Override
     public boolean onUnbind(Intent intent) {
+        SpiderDebug.log("playback-lifecycle", "service unbind action=%s local=%s external=%s before %s", intent == null ? null : intent.getAction(), isLocalBind(intent), isExternalBind(intent), serviceState());
         if (isExternalBind(intent)) releaseExternal();
         if (isLocalBind(intent)) tryShutdown();
+        SpiderDebug.log("playback-lifecycle", "service unbind after %s", serviceState());
         return super.onUnbind(intent);
     }
 
     @Override
     public void onTaskRemoved(Intent rootIntent) {
+        SpiderDebug.log("playback-lifecycle", "service taskRemoved root=%s %s", rootIntent, serviceState());
         tryShutdown();
     }
 
     @Override
     public void onDisconnected(@NonNull MediaSession session, @NonNull MediaSession.ControllerInfo controller) {
+        SpiderDebug.log("playback-lifecycle", "service controller disconnected package=%s %s", controller.getPackageName(), serviceState());
         if (controller.getPackageName().equals(getPackageName())) return;
         tryShutdown();
     }
 
     @Override
     public void onDestroy() {
+        SpiderDebug.log("playback-lifecycle", "service destroy before %s", serviceState());
         running = false;
         syncAudioHistoryProgress(true);
         clearAudioHistoryRecord();
@@ -201,6 +219,7 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
         Server.get().setService(null);
         EventBus.getDefault().unregister(this);
         super.onDestroy();
+        SpiderDebug.log("playback-lifecycle", "service destroy after running=%s", running);
     }
 
     private void stopAndClear() {
@@ -212,12 +231,14 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
     }
 
     public void suspend() {
+        SpiderDebug.log("playback-lifecycle", "service suspend %s", serviceState());
         stopAndClear();
         removeForeground();
     }
 
     public void shutdown() {
         if (!running) return;
+        SpiderDebug.log("playback-lifecycle", "service shutdown %s", serviceState());
         running = false;
         keepAlive = false;
         syncAudioHistoryProgress(true);
@@ -227,15 +248,18 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
     }
 
     private void tryShutdown() {
+        SpiderDebug.log("playback-lifecycle", "service tryShutdown %s", serviceState());
         if (keepAlive) return;
         if (!hasNavigationCallback() && !hasExternalClient()) shutdown();
     }
 
     private void releaseExternal() {
+        SpiderDebug.log("playback-lifecycle", "service releaseExternal before %s", serviceState());
         externalBound = false;
         saveProgress();
         BrowseTree.clear();
         tryShutdown();
+        SpiderDebug.log("playback-lifecycle", "service releaseExternal after %s", serviceState());
     }
 
     private void releaseSession() {

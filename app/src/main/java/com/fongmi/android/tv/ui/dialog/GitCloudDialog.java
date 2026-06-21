@@ -21,6 +21,7 @@ import android.text.InputType;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -97,6 +98,10 @@ import okhttp3.ResponseBody;
 
 public class GitCloudDialog extends BaseAlertDialog {
 
+    private static final String FOCUS_TREE_TOGGLE = "git_cloud_tree_toggle:";
+    private static final String FOCUS_TREE_CHECK = "git_cloud_tree_check:";
+    private static final String FOCUS_TREE_INFO = "git_cloud_tree_info:";
+
     private final JGitDriveEngine driveEngine = new JGitDriveEngine();
     private final ActivityResultLauncher<Intent> filePicker = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) return;
@@ -126,6 +131,7 @@ public class GitCloudDialog extends BaseAlertDialog {
     private int progressValue;
     private boolean progressIndeterminate;
     private String reposAccountId;
+    private String pendingTreeFocusTag;
     private GitFile pendingDownloadFile;
     private File downloadDirSelected;
     private LinearLayoutCompat downloadDirList;
@@ -174,6 +180,11 @@ public class GitCloudDialog extends BaseAlertDialog {
         window.setAttributes(params);
         window.setLayout(params.width, params.height);
         if (clipboardOverlay == null) clipboardOverlay = SettingClipboardOverlay.attach(this, binding.getRoot());
+        getDialog().setOnKeyListener((dialog, keyCode, event) -> {
+            if (keyCode != KeyEvent.KEYCODE_BACK || repo == null) return false;
+            if (event.getAction() == KeyEvent.ACTION_UP && !busy) changeRepo();
+            return true;
+        });
     }
 
     @Override
@@ -560,6 +571,10 @@ public class GitCloudDialog extends BaseAlertDialog {
 
     private View repoRow(GitRepo item) {
         LinearLayoutCompat root = card();
+        root.setFocusable(false);
+        root.setFocusableInTouchMode(false);
+        root.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+        root.setBackground(ContextCompat.getDrawable(requireContext(), R.drawable.selector_git_cloud_card));
         LinearLayoutCompat top = row();
         top.addView(text(item.displayName(), 15, Color.BLACK, true), new LinearLayoutCompat.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         top.addView(pill(item.privateRepo ? "私有" : "公开"));
@@ -641,39 +656,55 @@ public class GitCloudDialog extends BaseAlertDialog {
     }
 
     private void showFiles(String path, List<GitFile> files) {
-        fileTree.put(path == null ? "" : path, files);
+        String key = path == null ? "" : path;
+        fileTree.put(key, files);
+        if (isCoveredBySelectedDirectory(key)) selectLoadedDescendants(key);
         renderFileTree();
     }
 
     private void renderFileTree() {
         if (binding == null || binding.fileList == null) return;
         binding.fileList.removeAllViews();
-        if (repo == null) return;
+        if (repo == null) {
+            restoreTreeFocus();
+            return;
+        }
         binding.fileList.addView(treeRootRow());
-        if (!expandedPaths.contains("")) return;
+        if (!expandedPaths.contains("")) {
+            restoreTreeFocus();
+            return;
+        }
         List<GitFile> files = fileTree.get("");
         if (files == null) {
             binding.fileList.addView(empty("目录加载中"));
+            restoreTreeFocus();
             return;
         }
         if (files.isEmpty()) {
             binding.fileList.addView(empty("目录为空"));
+            restoreTreeFocus();
             return;
         }
         addTreeRows(files, 1);
+        restoreTreeFocus();
     }
 
     private View treeRootRow() {
         LinearLayoutCompat line = treeLine(0, TextUtils.isEmpty(currentPath));
         ImageButton toggle = treeToggle(expandedPaths.contains(""));
-        toggle.setOnClickListener(view -> toggleTree(""));
+        toggle.setTag(treeFocusTag(FOCUS_TREE_TOGGLE, ""));
+        toggle.setOnClickListener(view -> toggleTree("", treeFocusTag(FOCUS_TREE_TOGGLE, "")));
         line.addView(toggle, new LinearLayoutCompat.LayoutParams(dp(30), dp(30)));
         ImageView icon = treeIcon(R.drawable.ic_folder, Color.parseColor("#F9AB00"));
         line.addView(icon, new LinearLayoutCompat.LayoutParams(dp(22), dp(22)));
         MaterialTextView name = text(repo == null ? "全部文件" : repo.name, 15, Color.BLACK, true);
         name.setPadding(dp(8), 0, 0, 0);
-        line.addView(name, new LinearLayoutCompat.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        line.setOnClickListener(view -> toggleTree(""));
+        makeFocusable(name);
+        name.setTag(treeFocusTag(FOCUS_TREE_INFO, ""));
+        name.setBackground(ContextCompat.getDrawable(requireContext(), R.drawable.selector_git_cloud_inline_focus));
+        name.setOnClickListener(view -> toggleTree("", treeFocusTag(FOCUS_TREE_INFO, "")));
+        line.addView(name, new LinearLayoutCompat.LayoutParams(0, dp(32), 1));
+        line.setOnClickListener(view -> toggleTree("", treeFocusTag(FOCUS_TREE_INFO, "")));
         return line;
     }
 
@@ -696,10 +727,12 @@ public class GitCloudDialog extends BaseAlertDialog {
         LinearLayoutCompat line = treeLine(depth, TextUtils.equals(currentPath, file.path) || selectedFiles.containsKey(file.path));
         if (file.directory) {
             ImageButton toggle = treeToggle(expandedPaths.contains(file.path));
-            toggle.setOnClickListener(view -> toggleTree(file.path));
+            toggle.setTag(treeFocusTag(FOCUS_TREE_TOGGLE, file.path));
+            toggle.setOnClickListener(view -> toggleTree(file.path, treeFocusTag(FOCUS_TREE_TOGGLE, file.path)));
             line.addView(toggle, new LinearLayoutCompat.LayoutParams(dp(28), dp(30)));
         }
         MaterialCheckBox check = checkbox(file);
+        check.setTag(treeFocusTag(FOCUS_TREE_CHECK, file.path));
         line.addView(check, new LinearLayoutCompat.LayoutParams(dp(30), dp(30)));
         ImageView icon = treeIcon(file.directory ? R.drawable.ic_folder : R.drawable.ic_file, file.directory ? Color.parseColor("#F9AB00") : Color.parseColor("#5F6368"));
         line.addView(icon, new LinearLayoutCompat.LayoutParams(dp(22), dp(22)));
@@ -710,9 +743,16 @@ public class GitCloudDialog extends BaseAlertDialog {
         info.addView(name);
         info.addView(meta);
         info.setPadding(dp(8), 0, 0, 0);
+        info.setBackground(ContextCompat.getDrawable(requireContext(), R.drawable.selector_git_cloud_inline_focus));
+        info.setTag(treeFocusTag(FOCUS_TREE_INFO, file.path));
+        makeFocusable(info);
+        info.setOnClickListener(view -> {
+            if (file.directory) toggleTree(file.path, treeFocusTag(FOCUS_TREE_INFO, file.path));
+            else copy(file.rawUrl);
+        });
         line.addView(info, new LinearLayoutCompat.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         line.setOnClickListener(view -> {
-            if (file.directory) toggleTree(file.path);
+            if (file.directory) toggleTree(file.path, treeFocusTag(FOCUS_TREE_INFO, file.path));
             else copy(file.rawUrl);
         });
         return line;
@@ -771,7 +811,12 @@ public class GitCloudDialog extends BaseAlertDialog {
     }
 
     private void toggleTree(String path) {
+        toggleTree(path, treeFocusTag(FOCUS_TREE_INFO, path));
+    }
+
+    private void toggleTree(String path, String focusTag) {
         String key = path == null ? "" : path;
+        pendingTreeFocusTag = focusTag;
         if (expandedPaths.contains(key)) {
             expandedPaths.remove(key);
             renderFileTree();
@@ -1093,9 +1138,10 @@ public class GitCloudDialog extends BaseAlertDialog {
             Notify.show("未选择文件");
             return;
         }
+        List<GitFile> targets = selectedDeleteTargets();
         int dirs = 0;
-        for (GitFile file : selectedFiles.values()) if (file.directory) dirs++;
-        String message = "确定删除选中的 " + selectedFiles.size() + " 项？";
+        for (GitFile file : targets) if (file.directory) dirs++;
+        String message = "确定删除选中的 " + targets.size() + " 项？";
         if (dirs > 0) message += "目录会递归删除其中的文件。";
         new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
                 .setTitle("删除文件")
@@ -1106,23 +1152,76 @@ public class GitCloudDialog extends BaseAlertDialog {
     }
 
     private void deleteSelectedSync() {
-        List<GitFile> targets = new ArrayList<>(selectedFiles.values());
+        List<GitFile> targets = selectedDeleteTargets();
         run("删除文件中", () -> {
-            List<FileChange> changes = new ArrayList<>();
-            Set<String> seen = new HashSet<>();
-            for (GitFile file : targets) collectDeleteChanges(file, changes, seen);
-            if (changes.isEmpty()) throw new IllegalStateException("没有可删除的文件");
-            updateProgress("提交删除 " + changes.size() + " 个文件", 80, true);
-            driveEngine.commitAndPush(driveConfig(), changes);
+            List<String> refreshPaths = deleteRefreshPaths(targets);
+            if (provider().capabilities().contentsWrite) deleteByContentsApi(targets);
+            else deleteByGitEngine(targets);
             App.post(() -> {
-                currentPath = "";
                 selectedFiles.clear();
-                fileTree.clear();
-                expandedPaths.clear();
-                expandedPaths.add("");
+                removeDeletedTreeState(targets);
+                renderFileTree();
             });
-            refreshAfterWriteSync("");
+            refreshDeletePathsSync(refreshPaths, targets);
         });
+    }
+
+    private List<String> deleteRefreshPaths(List<GitFile> targets) {
+        Set<String> paths = new HashSet<>();
+        if (!isPathDeleted(currentPath, targets)) paths.add(currentPath == null ? "" : currentPath);
+        for (GitFile file : targets) {
+            if (file == null || TextUtils.isEmpty(file.path)) continue;
+            paths.add(parent(file.path));
+        }
+        return new ArrayList<>(paths);
+    }
+
+    private void removeDeletedTreeState(List<GitFile> targets) {
+        for (GitFile file : targets) {
+            if (file == null || TextUtils.isEmpty(file.path)) continue;
+            fileTree.remove(file.path);
+            selectedFiles.remove(file.path);
+            removePathPrefix(fileTree.keySet(), file.path);
+            removePathPrefix(expandedPaths, file.path);
+            removePathPrefix(selectedFiles.keySet(), file.path);
+            removeDeletedFromCachedLists(file.path);
+        }
+    }
+
+    private void removePathPrefix(Set<String> paths, String path) {
+        if (paths == null || TextUtils.isEmpty(path)) return;
+        List<String> remove = new ArrayList<>();
+        for (String value : paths) if (TextUtils.equals(value, path) || value.startsWith(path + "/")) remove.add(value);
+        for (String value : remove) paths.remove(value);
+    }
+
+    private void removeDeletedFromCachedLists(String path) {
+        for (List<GitFile> files : fileTree.values()) {
+            if (files == null) continue;
+            files.removeIf(file -> file != null && (TextUtils.equals(file.path, path) || file.path.startsWith(path + "/")));
+        }
+    }
+
+    private void deleteByContentsApi(List<GitFile> targets) throws Exception {
+        List<GitFile> files = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (GitFile file : targets) collectDeleteFiles(file, files, seen);
+        if (files.isEmpty()) throw new IllegalStateException("没有可删除的文件");
+        for (int i = 0; i < files.size(); i++) {
+            GitFile file = files.get(i);
+            updateProgress("删除 " + (i + 1) + "/" + files.size() + " · " + file.path, percent(i, files.size()), false);
+            provider().deleteFile(account, token(), repo, repo.defaultBranch, file, "delete: " + file.path);
+            updateProgress("已删除 " + (i + 1) + "/" + files.size(), percent(i + 1, files.size()), false);
+        }
+    }
+
+    private void deleteByGitEngine(List<GitFile> targets) throws Exception {
+        List<FileChange> changes = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (GitFile file : targets) collectDeleteChanges(file, changes, seen);
+        if (changes.isEmpty()) throw new IllegalStateException("没有可删除的文件");
+        updateProgress("提交删除 " + changes.size() + " 个文件", 80, true);
+        driveEngine.commitAndPush(driveConfig(), changes);
     }
 
     private void collectDeleteChanges(GitFile file, List<FileChange> changes, Set<String> seen) throws Exception {
@@ -1134,6 +1233,17 @@ public class GitCloudDialog extends BaseAlertDialog {
         updateProgress("扫描目录 " + file.path, 0, true);
         List<GitFile> children = provider().listFiles(account, token(), repo, repo.defaultBranch, file.path);
         for (GitFile child : children) collectDeleteChanges(child, changes, seen);
+    }
+
+    private void collectDeleteFiles(GitFile file, List<GitFile> files, Set<String> seen) throws Exception {
+        if (file == null || TextUtils.isEmpty(file.path)) return;
+        if (!file.directory) {
+            if (seen.add(file.path)) files.add(file);
+            return;
+        }
+        updateProgress("扫描目录 " + file.path, 0, true);
+        List<GitFile> children = provider().listFiles(account, token(), repo, repo.defaultBranch, file.path);
+        for (GitFile child : children) collectDeleteFiles(child, files, seen);
     }
 
     private void addDeleteChange(String path, List<FileChange> changes, Set<String> seen) {
@@ -1217,7 +1327,7 @@ public class GitCloudDialog extends BaseAlertDialog {
         if (changes == null || changes.isEmpty()) return;
         run(status, () -> {
             uploadChangesSync(changes);
-            refreshAfterWriteSync(currentPath);
+            refreshAfterWriteSync(currentPath, files -> containsUploadedChildren(currentPath, changes, files));
         });
     }
 
@@ -1240,16 +1350,114 @@ public class GitCloudDialog extends BaseAlertDialog {
     }
 
     private void refreshAfterWriteSync(String path) throws Exception {
+        refreshAfterWriteSync(path, null);
+    }
+
+    private void refreshAfterWriteSync(String path, RefreshVerifier verifier) throws Exception {
         String target = path == null ? "" : path;
         updateProgress("刷新目录", 100, true);
-        List<GitFile> files = provider().listFiles(account, token(), repo, repo.defaultBranch, target);
+        List<GitFile> files = listFilesFresh(target, verifier);
         App.post(() -> {
-            invalidateTree(target);
             expandedPaths.add(target);
             currentPath = target;
-            showFiles(target, files);
+            fileTree.put(target, files);
+            renderFileTree();
             render();
         });
+    }
+
+    private void refreshDeletePathsSync(List<String> paths, List<GitFile> targets) throws Exception {
+        if (paths == null || paths.isEmpty()) {
+            refreshAfterWriteSync("");
+            return;
+        }
+        updateProgress("刷新目录", 100, true);
+        Map<String, List<GitFile>> fresh = new HashMap<>();
+        for (String path : paths) {
+            String target = path == null ? "" : path;
+            fresh.put(target, listFilesFresh(target, files -> !containsDeletedChildren(target, targets, files)));
+        }
+        App.post(() -> {
+            for (String path : sortedPaths(fresh.keySet())) {
+                expandedPaths.add(path);
+                fileTree.put(path, fresh.get(path));
+            }
+            if (isPathDeleted(currentPath, targets)) currentPath = firstPath(paths);
+            renderFileTree();
+            render();
+        });
+    }
+
+    private List<String> sortedPaths(Set<String> paths) {
+        List<String> result = new ArrayList<>(paths);
+        result.sort((a, b) -> Integer.compare(pathDepth(a), pathDepth(b)));
+        return result;
+    }
+
+    private int pathDepth(String path) {
+        if (TextUtils.isEmpty(path)) return 0;
+        int depth = 1;
+        for (int i = 0; i < path.length(); i++) if (path.charAt(i) == '/') depth++;
+        return depth;
+    }
+
+    private List<GitFile> listFilesFresh(String path, RefreshVerifier verifier) throws Exception {
+        List<GitFile> files = null;
+        for (int attempt = 0; attempt < 4; attempt++) {
+            files = provider().listFiles(account, token(), repo, repo.defaultBranch, path);
+            if (verifier == null || verifier.isFresh(files)) return files;
+            Thread.sleep(400L * (attempt + 1));
+        }
+        return files == null ? new ArrayList<>() : files;
+    }
+
+    private boolean containsUploadedChildren(String path, List<FileChange> changes, List<GitFile> files) {
+        for (FileChange change : changes) {
+            String name = directChildName(path, change.path);
+            if (TextUtils.isEmpty(name)) continue;
+            if (!containsChild(files, name)) return false;
+        }
+        return true;
+    }
+
+    private boolean containsDeletedChildren(String path, List<GitFile> targets, List<GitFile> files) {
+        for (GitFile target : targets) {
+            String name = directChildName(path, target == null ? "" : target.path);
+            if (!TextUtils.isEmpty(name) && containsChild(files, name)) return true;
+        }
+        return false;
+    }
+
+    private boolean containsChild(List<GitFile> files, String name) {
+        if (files == null || TextUtils.isEmpty(name)) return false;
+        for (GitFile file : files) if (TextUtils.equals(file.name, name)) return true;
+        return false;
+    }
+
+    private String directChildName(String parent, String path) {
+        if (TextUtils.isEmpty(path)) return "";
+        String dir = parent == null ? "" : parent;
+        String value = path;
+        if (!TextUtils.isEmpty(dir)) {
+            if (!value.startsWith(dir + "/")) return "";
+            value = value.substring(dir.length() + 1);
+        }
+        int slash = value.indexOf('/');
+        return slash >= 0 ? value.substring(0, slash) : value;
+    }
+
+    private boolean isPathDeleted(String path, List<GitFile> targets) {
+        if (TextUtils.isEmpty(path)) return false;
+        for (GitFile file : targets) {
+            if (file == null || TextUtils.isEmpty(file.path)) continue;
+            if (file.directory && (TextUtils.equals(path, file.path) || path.startsWith(file.path + "/"))) return true;
+            if (!file.directory && TextUtils.equals(path, file.path)) return true;
+        }
+        return false;
+    }
+
+    private String firstPath(List<String> paths) {
+        return paths == null || paths.isEmpty() ? "" : (paths.get(0) == null ? "" : paths.get(0));
     }
 
     private void invalidateTree(String path) {
@@ -1435,6 +1643,24 @@ public class GitCloudDialog extends BaseAlertDialog {
         return files;
     }
 
+    private List<GitFile> selectedDeleteTargets() {
+        List<GitFile> targets = new ArrayList<>();
+        for (GitFile file : selectedFiles.values()) {
+            if (file == null || TextUtils.isEmpty(file.path)) continue;
+            if (!hasSelectedAncestorDirectory(file.path)) targets.add(file);
+        }
+        return targets;
+    }
+
+    private boolean hasSelectedAncestorDirectory(String path) {
+        if (TextUtils.isEmpty(path)) return false;
+        for (GitFile file : selectedFiles.values()) {
+            if (file == null || !file.directory || TextUtils.isEmpty(file.path)) continue;
+            if (!TextUtils.equals(file.path, path) && path.startsWith(file.path + "/")) return true;
+        }
+        return false;
+    }
+
     private GitFile selectedEditableFile() {
         if (selectedFiles.size() != 1) return null;
         GitFile file = selectedFiles.values().iterator().next();
@@ -1542,6 +1768,14 @@ public class GitCloudDialog extends BaseAlertDialog {
         TextInputLayout layout = new TextInputLayout(requireContext());
         layout.setHint(hint);
         layout.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        layout.setBoxBackgroundColor(Color.WHITE);
+        layout.setBoxStrokeColorStateList(ContextCompat.getColorStateList(requireContext(), R.color.dialog_outlined_button_stroke));
+        layout.setBoxStrokeWidth(dp(1));
+        layout.setBoxStrokeWidthFocused(dp(2));
+        layout.setHintTextColor(new ColorStateList(
+                new int[][]{new int[]{android.R.attr.state_focused}, new int[]{}},
+                new int[]{Color.parseColor("#0B57D0"), Color.parseColor("#5F6368")}
+        ));
         layout.setBoxCornerRadii(dp(8), dp(8), dp(8), dp(8));
         LinearLayoutCompat.LayoutParams params = new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         params.topMargin = dp(8);
@@ -1549,6 +1783,10 @@ public class GitCloudDialog extends BaseAlertDialog {
         TextInputEditText edit = new TextInputEditText(layout.getContext());
         edit.setSingleLine(!"内容".contentEquals(hint));
         edit.setTextSize(14);
+        edit.setTextColor(Color.parseColor("#202124"));
+        edit.setHintTextColor(Color.parseColor("#5F6368"));
+        edit.setSelectAllOnFocus(false);
+        edit.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
         if (password) edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         layout.addView(edit, new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return new TextInput(layout, edit);
@@ -1692,9 +1930,10 @@ public class GitCloudDialog extends BaseAlertDialog {
     private ImageButton treeToggle(boolean expanded) {
         ImageButton button = new ImageButton(requireContext());
         button.setImageResource(expanded ? R.drawable.ic_detail_minus : R.drawable.ic_detail_plus);
-        button.setBackgroundColor(Color.TRANSPARENT);
+        button.setBackground(ContextCompat.getDrawable(requireContext(), R.drawable.selector_git_cloud_inline_focus));
         button.setColorFilter(Color.parseColor("#174EA6"));
         button.setPadding(dp(6), dp(6), dp(6), dp(6));
+        makeFocusable(button);
         return button;
     }
 
@@ -1702,7 +1941,11 @@ public class GitCloudDialog extends BaseAlertDialog {
         LinearLayoutCompat view = row();
         view.setMinimumHeight(dp(42));
         view.setPadding(dp(4 + depth * 18), dp(5), dp(6), dp(5));
-        view.setBackground(selected ? round(Color.parseColor("#E8F0FE"), 7, Color.parseColor("#D2E3FC")) : ContextCompat.getDrawable(requireContext(), R.drawable.selector_sync_device_item));
+        view.setSelected(selected);
+        view.setBackground(ContextCompat.getDrawable(requireContext(), R.drawable.selector_git_cloud_tree_item));
+        view.setFocusable(false);
+        view.setFocusableInTouchMode(false);
+        view.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
         LinearLayoutCompat.LayoutParams params = new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         params.topMargin = dp(2);
         view.setLayoutParams(params);
@@ -1714,13 +1957,62 @@ public class GitCloudDialog extends BaseAlertDialog {
         check.setButtonTintList(ContextCompat.getColorStateList(requireContext(), R.color.dialog_checkbox_tint));
         check.setChecked(selectedFiles.containsKey(file.path));
         check.setPadding(0, 0, 0, 0);
+        check.setBackground(ContextCompat.getDrawable(requireContext(), R.drawable.selector_git_cloud_inline_focus));
+        makeFocusable(check);
         check.setOnClickListener(view -> {
-            if (selectedFiles.containsKey(file.path)) selectedFiles.remove(file.path);
-            else selectedFiles.put(file.path, file);
+            pendingTreeFocusTag = treeFocusTag(FOCUS_TREE_CHECK, file.path);
+            toggleSelection(file);
             render();
             renderFileTree();
         });
         return check;
+    }
+
+    private void toggleSelection(GitFile file) {
+        if (file == null || TextUtils.isEmpty(file.path)) return;
+        if (selectedFiles.containsKey(file.path)) deselect(file);
+        else select(file);
+    }
+
+    private void select(GitFile file) {
+        selectedFiles.put(file.path, file);
+        if (file.directory) selectLoadedDescendants(file.path);
+    }
+
+    private void deselect(GitFile file) {
+        selectedFiles.remove(file.path);
+        removeSelectedAncestorDirectories(file.path);
+        if (file.directory) removePathPrefix(selectedFiles.keySet(), file.path);
+    }
+
+    private void selectLoadedDescendants(String path) {
+        List<GitFile> children = fileTree.get(path == null ? "" : path);
+        if (children == null || children.isEmpty()) return;
+        for (GitFile child : children) {
+            if (child == null || TextUtils.isEmpty(child.path)) continue;
+            selectedFiles.put(child.path, child);
+            if (child.directory) selectLoadedDescendants(child.path);
+        }
+    }
+
+    private boolean isCoveredBySelectedDirectory(String path) {
+        if (TextUtils.isEmpty(path)) return false;
+        List<GitFile> selected = new ArrayList<>(selectedFiles.values());
+        for (GitFile file : selected) {
+            if (file == null || !file.directory || TextUtils.isEmpty(file.path)) continue;
+            if (TextUtils.equals(file.path, path) || path.startsWith(file.path + "/")) return true;
+        }
+        return false;
+    }
+
+    private void removeSelectedAncestorDirectories(String path) {
+        if (TextUtils.isEmpty(path)) return;
+        List<String> remove = new ArrayList<>();
+        for (GitFile file : selectedFiles.values()) {
+            if (file == null || !file.directory || TextUtils.isEmpty(file.path)) continue;
+            if (!TextUtils.equals(file.path, path) && path.startsWith(file.path + "/")) remove.add(file.path);
+        }
+        for (String key : remove) selectedFiles.remove(key);
     }
 
     private ImageView treeIcon(int icon, int color) {
@@ -1801,11 +2093,59 @@ public class GitCloudDialog extends BaseAlertDialog {
         button.setText(text);
         button.setTextSize(13);
         button.setAllCaps(false);
+        button.setFocusable(true);
+        button.setFocusableInTouchMode(false);
         button.setMinWidth(0);
         button.setMinHeight(dp(32));
         button.setMinimumHeight(dp(32));
         button.setPadding(dp(6), 0, dp(6), 0);
         return button;
+    }
+
+    private void makeFocusable(View view) {
+        view.setFocusable(true);
+        view.setFocusableInTouchMode(false);
+        view.setClickable(true);
+    }
+
+    private String treeFocusTag(String prefix, String path) {
+        return prefix + (path == null ? "" : path);
+    }
+
+    private void restoreTreeFocus() {
+        if (binding == null || binding.fileList == null || TextUtils.isEmpty(pendingTreeFocusTag)) return;
+        String tag = pendingTreeFocusTag;
+        pendingTreeFocusTag = null;
+        binding.fileList.post(() -> {
+            if (binding == null || binding.fileList == null) return;
+            View target = findTaggedView(binding.fileList, tag);
+            if (target == null) target = findFirstFocusable(binding.fileList);
+            if (target != null && target.isShown() && target.isEnabled()) target.requestFocus();
+        });
+    }
+
+    private View findTaggedView(View view, Object tag) {
+        if (view == null) return null;
+        if (tag.equals(view.getTag())) return view;
+        if (!(view instanceof ViewGroup)) return null;
+        ViewGroup group = (ViewGroup) view;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View found = findTaggedView(group.getChildAt(i), tag);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private View findFirstFocusable(View view) {
+        if (view == null) return null;
+        if (view.isFocusable() && view.isShown() && view.isEnabled()) return view;
+        if (!(view instanceof ViewGroup)) return null;
+        ViewGroup group = (ViewGroup) view;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View found = findFirstFocusable(group.getChildAt(i));
+            if (found != null) return found;
+        }
+        return null;
     }
 
     private GradientDrawable round(int color, int radius, int stroke) {
@@ -2074,6 +2414,10 @@ public class GitCloudDialog extends BaseAlertDialog {
 
     private interface CheckedRunnable {
         void run() throws Exception;
+    }
+
+    private interface RefreshVerifier {
+        boolean isFresh(List<GitFile> files);
     }
 
     private static class TextInput {

@@ -304,6 +304,26 @@ Release/apk/leanback-arm64_v8a.apk
 Release/apk/leanback-armeabi_v7a.apk
 ```
 
+### GitHub 手动发布
+
+仓库内置 `.github/workflows/android-release.yml`,只支持在 GitHub Actions 页面手动触发,不会在每次 push 代码时自动打包。默认 tag 会按当前 `versionName` 生成 `v5.5.2-sdk28-yyyyMMddHHmm`,也可以手动填写同格式 tag。
+
+工作流会构建 4 个 release APK,生成同名更新清单 JSON,发布到 GitHub Release,并可同步到 CNB 镜像仓库 `apk/` 目录。正式发布前建议在 GitHub Secrets 配置:
+
+```text
+RELEASE_KEYSTORE_BASE64  # release keystore 的 base64 内容
+RELEASE_KEY_ALIAS        # key alias
+RELEASE_STORE_PASSWORD   # store password,key password 复用该值
+RELEASE_KEY_PASSWORD     # 可选,key password 与 store password 不同时配置
+CNB_TOKEN                # 可选,用于同步 CNB
+```
+
+CNB 默认同步到 `https://cnb.cool/fish2018/webhtv.git`,如需修改,在 GitHub 仓库变量中设置 `CNB_REPO_URL`。
+
+GitHub Actions 正式发布必须配置签名 secrets,否则会直接失败,避免使用 runner 临时 debug key 生成无法覆盖安装的 APK。
+
+如果发布时忘记配置 `CNB_TOKEN` 或 CNB 同步失败,不需要重新打包。配置好 `CNB_TOKEN` 后,在 GitHub Actions 手动运行 `CNB Release Sync`,填写已有 `release_tag` 即可把该 GitHub Release 的 APK/JSON 补同步到 CNB；`release_tag` 留空时同步最新 release。
+
 ### 签名
 
 默认不需要配置签名文件。没有 `local.properties` 时,release 包使用 debug signing 兜底,方便 clone 后直接打包测试。
