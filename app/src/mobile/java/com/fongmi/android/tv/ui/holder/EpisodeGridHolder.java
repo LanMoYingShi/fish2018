@@ -44,8 +44,11 @@ public class EpisodeGridHolder extends BaseEpisodeHolder {
     private void bindText(Episode item) {
         binding.card.setVisibility(View.GONE);
         binding.text.setVisibility(View.VISIBLE);
-        binding.text.setSelected(item.isSelected());
+        binding.text.setActivated(item.isSelected());
+        binding.text.setSelected(false);
+        binding.text.setEllipsize(TextUtils.TruncateAt.START);
         binding.text.setText(EpisodeAdapter.getNativeTitle(item));
+        binding.text.setOnFocusChangeListener((view, hasFocus) -> binding.text.setEllipsize(hasFocus ? TextUtils.TruncateAt.MARQUEE : TextUtils.TruncateAt.START));
         binding.text.setOnClickListener(v -> listener.onItemClick(item));
         EpisodeAdapter.bindNativeTitlePopup(binding.getRoot(), item);
         EpisodeAdapter.bindNativeTitlePopup(binding.text, item);
