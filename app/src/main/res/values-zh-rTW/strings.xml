@@ -795,6 +795,7 @@
     <string name="player_lyrics_cache">歌詞快取</string>
     <string name="player_lyrics_cache_value">%1$d 項</string>
     <string name="player_lyrics_cache_cleared">歌詞快取已清理</string>
+    <string name="player_lyrics_search">搜尋歌詞</string>
     <string name="player_lyrics_reload">重搜歌詞</string>
     <string name="player_lyrics_keyword">歌詞關鍵字</string>
     <string name="player_lyrics_keyword_required">請輸入歌詞關鍵字</string>
@@ -1034,6 +1035,7 @@
         <item>網易 YRC</item>
         <item>酷我</item>
         <item>LRCLIB</item>
+        <item>酷狗</item>
     </string-array>
 
     <string-array name="select_track">

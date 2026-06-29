@@ -7,7 +7,7 @@ import java.util.List;
 
 public class LyricsResult {
 
-    private static final int CACHE_VERSION = 11;
+    private static final int CACHE_VERSION = 12;
 
     private int cacheVersion;
     private String source;
@@ -18,6 +18,7 @@ public class LyricsResult {
     private long durationMs;
     private boolean synced;
     private int score;
+    private transient Boolean wordTiming;
 
     public LyricsResult() {
     }
@@ -71,7 +72,12 @@ public class LyricsResult {
     }
 
     public boolean hasWordTiming() {
-        return !TextUtils.isEmpty(lyrics) && lyrics.matches("(?s).*<\\d+,-?\\d+>.*");
+        if (wordTiming != null) return wordTiming;
+        if (TextUtils.isEmpty(lyrics) || !lyrics.matches("(?s).*<\\d+,-?\\d+>.*")) return wordTiming = false;
+        for (LyricsLine line : LyricsParser.parseTimed(lyrics)) {
+            if (line.hasWords()) return wordTiming = true;
+        }
+        return wordTiming = false;
     }
 
     public boolean isValid() {

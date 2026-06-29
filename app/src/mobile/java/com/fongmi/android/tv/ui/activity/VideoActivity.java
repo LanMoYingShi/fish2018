@@ -23,6 +23,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.fragment.app.Fragment;
@@ -149,6 +150,9 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private QuickSearchDialog mQuickSearchDialog;
     private ParseAdapter mParseAdapter;
     private LyricsController mLyrics;
+    private AlertDialog mLyricsResultDialog;
+    private List<LyricsResult> mLyricsSearchResults;
+    private String mLyricsSearchKeyword;
     private String mDetailLyrics;
     private String mInlineLyrics;
     private Map<String, View> mActionButtons;
@@ -168,6 +172,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private boolean playHealthRecorded;
     private int mEpisodeSpanCount;
     private int mEpisodeBottomInset;
+    private int mLyricsSearchSeq;
     private int mEpisodeMaxHeight;
     private Runnable mR1;
     private Runnable mR2;
@@ -1929,26 +1934,65 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         return request.displayKeyword();
     }
 
+    private String getLyricsSearchCacheKey(String keyword) {
+        if (service() == null) return keyword;
+        return LyricsRequest.from(player()).withKeyword(keyword).signature();
+    }
+
     private void searchLyrics(String keyword) {
         if (mLyrics == null || service() == null) return;
         updateAudioOnlyState();
-        Notify.show(R.string.player_lyrics_searching);
-        mLyrics.search(player(), isAudioOnly() || isMusicLike(), keyword, this::showLyricsResults);
+        int seq = ++mLyricsSearchSeq;
+        String cacheKey = getLyricsSearchCacheKey(keyword);
+        if (TextUtils.equals(mLyricsSearchKeyword, cacheKey) && mLyricsSearchResults != null && !mLyricsSearchResults.isEmpty()) {
+            showLyricsResults(seq, cacheKey, mLyricsSearchResults);
+            return;
+        }
+        showLyricsSearching(seq);
+        mLyrics.search(player(), isAudioOnly() || isMusicLike(), keyword, results -> showLyricsResults(seq, cacheKey, results));
     }
 
-    private void showLyricsResults(List<LyricsResult> results) {
+    private void showLyricsSearching(int seq) {
+        dismissLyricsResultDialog();
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(R.string.player_lyrics_search)
+                .setMessage(R.string.player_lyrics_searching)
+                .setNegativeButton(R.string.dialog_cancel, (d, which) -> {
+                    if (seq == mLyricsSearchSeq) mLyricsSearchSeq++;
+                })
+                .create();
+        dialog.setOnCancelListener(d -> {
+            if (seq == mLyricsSearchSeq) mLyricsSearchSeq++;
+        });
+        dialog.setOnDismissListener(d -> {
+            if (mLyricsResultDialog == dialog) mLyricsResultDialog = null;
+        });
+        mLyricsResultDialog = dialog;
+        dialog.show();
+    }
+
+    private void showLyricsResults(int seq, String cacheKey, List<LyricsResult> results) {
+        if (seq != mLyricsSearchSeq) return;
         if (isFinishing()) return;
+        dismissLyricsResultDialog();
         if (results == null || results.isEmpty()) {
             Notify.show(R.string.player_lyrics_not_found);
             return;
         }
+        mLyricsSearchResults = results;
+        mLyricsSearchKeyword = cacheKey;
         String[] labels = new String[results.size()];
         for (int i = 0; i < results.size(); i++) labels[i] = getLyricsResultLabel(results.get(i));
-        new MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_WebHTV_LightDialog)
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_WebHTV_LightDialog)
                 .setTitle(R.string.player_lyrics_select)
-                .setItems(labels, (dialog, which) -> applyLyrics(results.get(which)))
+                .setSingleChoiceItems(labels, -1, (d, which) -> applyLyrics(results.get(which)))
                 .setNegativeButton(R.string.dialog_cancel, null)
-                .show();
+                .create();
+        dialog.setOnDismissListener(d -> {
+            if (mLyricsResultDialog == dialog) mLyricsResultDialog = null;
+        });
+        mLyricsResultDialog = dialog;
+        dialog.show();
     }
 
     private void applyLyrics(LyricsResult result) {
@@ -1966,6 +2010,12 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void clearLyrics() {
         if (mLyrics != null) mLyrics.clear();
+    }
+
+    private void dismissLyricsResultDialog() {
+        if (mLyricsResultDialog == null) return;
+        mLyricsResultDialog.dismiss();
+        mLyricsResultDialog = null;
     }
 
     private void setDetailLyrics(String text) {
@@ -2611,6 +2661,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     @Override
     protected void onDestroy() {
+        mLyricsSearchSeq++;
+        dismissLyricsResultDialog();
         if (mLyrics != null) mLyrics.release();
         mClock.release();
         saveHistory(true);

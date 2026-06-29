@@ -16,6 +16,9 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class LyricsRepository {
 
@@ -30,6 +33,7 @@ public class LyricsRepository {
     private static final String TAG = "lyrics";
     private final LrcLibClient client = new LrcLibClient();
     private final KuwoClient kuwo = new KuwoClient();
+    private final KugouClient kugou = new KugouClient();
     private final QqMusicClient qqMusic = new QqMusicClient();
     private final NeteaseClient netease = new NeteaseClient();
     private final TtmlClient ttml = new TtmlClient();
@@ -168,6 +172,8 @@ public class LyricsRepository {
         if (shouldUseRemote(remote, cloud)) remote = cloud;
         LyricsResult kuwoResult = kuwo.find(request);
         if (shouldUseRemote(remote, kuwoResult)) remote = kuwoResult;
+        LyricsResult kugouResult = kugou.find(request);
+        if (shouldUseRemote(remote, kugouResult)) remote = kugouResult;
         List<LrcLibClient.Entry> candidates = remote == null || !remote.isValid() ? client.findCandidates(request) : List.of();
         if (remote == null || !remote.isValid()) remote = matcher.best(request, candidates);
         if (remote != null && remote.isValid()) writeCache(request, sourceMode, remote);
@@ -178,6 +184,7 @@ public class LyricsRepository {
     private List<LyricsResult> searchSync(LyricsRequest request) {
         int sourceMode = LyricsSetting.getSourceMode();
         ArrayList<LyricsResult> results = new ArrayList<>();
+        ArrayList<SearchFuture> futures = new ArrayList<>();
         LyricsResult local = readLocal(request);
         switch (sourceMode) {
             case LyricsSetting.SOURCE_LOCAL -> add(results, local);
@@ -186,16 +193,19 @@ public class LyricsRepository {
             case LyricsSetting.SOURCE_NETEASE -> addAll(results, netease.findAll(request, 8));
             case LyricsSetting.SOURCE_KUWO -> addAll(results, kuwo.findAll(request, 8));
             case LyricsSetting.SOURCE_LRCLIB -> addAll(results, matcher.all(request, client.findCandidates(request), 8));
+            case LyricsSetting.SOURCE_KUGOU -> addAll(results, kugou.findAll(request, 8));
             default -> {
                 add(results, local);
-                addAll(results, qqMusic.findAll(request, 4));
-                add(results, ttml.find(request));
-                addAll(results, netease.findAll(request, 4));
-                addAll(results, kuwo.findAll(request, 4));
-                addAll(results, matcher.all(request, client.findCandidates(request), 6));
+                addSearch(futures, "QQMusic", () -> qqMusic.findAll(request, 4));
+                addSearch(futures, "AMLL TTML", () -> one(ttml.find(request)));
+                addSearch(futures, "Netease", () -> netease.findAll(request, 4));
+                addSearch(futures, "Kuwo", () -> kuwo.findAll(request, 4));
+                addSearch(futures, "Kugou", () -> kugou.findAll(request, 4));
+                addSearch(futures, "LRCLIB", () -> matcher.all(request, client.findCandidates(request), 6));
+                collectSearch(results, futures);
             }
         }
-        return sorted(results, 18);
+        return sorted(results, 24);
     }
 
     private LyricsResult loadSource(LyricsRequest request, int sourceMode, LyricsResult local) {
@@ -206,6 +216,7 @@ public class LyricsRepository {
             case LyricsSetting.SOURCE_NETEASE -> netease.find(request);
             case LyricsSetting.SOURCE_KUWO -> kuwo.find(request);
             case LyricsSetting.SOURCE_LRCLIB -> matcher.best(request, client.findCandidates(request));
+            case LyricsSetting.SOURCE_KUGOU -> kugou.find(request);
             default -> null;
         };
         if (result != null && result.isValid()) writeCache(request, sourceMode, result);
@@ -240,9 +251,43 @@ public class LyricsRepository {
         if (source.contains("AMLL TTML")) return 50;
         if (source.contains("QQMusic")) return 45;
         if (source.contains("Netease")) return 40;
+        if (source.contains("Kugou KRC")) return 35;
         if (source.contains("Kuwo")) return 10;
+        if (source.contains("Kugou")) return 8;
         if (source.contains("Local")) return 30;
         return 0;
+    }
+
+    private void addSearch(List<SearchFuture> futures, String source, SearchAction action) {
+        futures.add(new SearchFuture(source, Task.largeExecutor().submit(() -> {
+            try {
+                return action.run();
+            } catch (Throwable e) {
+                if (SpiderDebug.isEnabled()) SpiderDebug.log(TAG, "search source=%s failed error=%s", source, e.getMessage());
+                return List.of();
+            }
+        })));
+    }
+
+    private void collectSearch(List<LyricsResult> results, List<SearchFuture> futures) {
+        long deadline = System.currentTimeMillis() + 22000;
+        for (SearchFuture item : futures) {
+            try {
+                long wait = Math.max(1, deadline - System.currentTimeMillis());
+                addAll(results, item.future.get(wait, TimeUnit.MILLISECONDS));
+            } catch (TimeoutException e) {
+                item.future.cancel(true);
+                if (SpiderDebug.isEnabled()) SpiderDebug.log(TAG, "search source=%s timeout", item.source);
+            } catch (Throwable e) {
+                if (SpiderDebug.isEnabled()) SpiderDebug.log(TAG, "search source=%s failed error=%s", item.source, e.getMessage());
+            }
+        }
+    }
+
+    private List<LyricsResult> one(LyricsResult result) {
+        ArrayList<LyricsResult> results = new ArrayList<>();
+        add(results, result);
+        return results;
     }
 
     private void add(List<LyricsResult> results, LyricsResult result) {
@@ -384,5 +429,19 @@ public class LyricsRepository {
 
     private static File cacheDir() {
         return Path.cache("lyrics");
+    }
+
+    private interface SearchAction {
+        List<LyricsResult> run();
+    }
+
+    private static class SearchFuture {
+        private final String source;
+        private final Future<List<LyricsResult>> future;
+
+        private SearchFuture(String source, Future<List<LyricsResult>> future) {
+            this.source = source;
+            this.future = future;
+        }
     }
 }

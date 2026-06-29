@@ -813,6 +813,7 @@
     <string name="player_lyrics_cache">Lyric cache</string>
     <string name="player_lyrics_cache_value">%1$d items</string>
     <string name="player_lyrics_cache_cleared">Lyric cache cleared</string>
+    <string name="player_lyrics_search">Search lyrics</string>
     <string name="player_lyrics_reload">Search lyrics again</string>
     <string name="player_lyrics_keyword">Lyric keyword</string>
     <string name="player_lyrics_keyword_required">Enter a lyric keyword</string>
@@ -1058,6 +1059,7 @@
         <item>Netease YRC</item>
         <item>Kuwo</item>
         <item>LRCLIB</item>
+        <item>Kugou</item>
     </string-array>
 
     <string-array name="select_track">
