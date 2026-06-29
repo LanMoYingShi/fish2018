@@ -18,6 +18,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
@@ -29,6 +31,8 @@ public class KuwoClient {
     private static final String TAG = "lyrics";
     private static final String USER_AGENT = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36";
     private static final int MIN_SCORE = 58;
+    private static final Pattern LRC_LINE = Pattern.compile("^(\\[(\\d{1,3}):(\\d{2})(?:[.:](\\d{1,3}))?])(.*)$");
+    private static final Pattern LRCX_WORD = Pattern.compile("<(-?\\d+),(-?\\d+)>([^<]*)");
     private static final OkHttpClient CLIENT = OkHttp.client()
             .newBuilder()
             .connectTimeout(10, TimeUnit.SECONDS)
@@ -160,11 +164,49 @@ public class KuwoClient {
             JSONObject data = object.optJSONObject("data");
             String content = data == null ? "" : data.optString("content");
             if (TextUtils.isEmpty(content)) return "";
-            return new String(Base64.decode(content, Base64.DEFAULT));
+            return normalizeLrcx(new String(Base64.decode(content, Base64.DEFAULT)));
         } catch (Exception e) {
             if (SpiderDebug.isEnabled()) SpiderDebug.log(TAG, "kuwo mobi lyric failed id=%s error=%s", id, e.getMessage());
             return "";
         }
+    }
+
+    private String normalizeLrcx(String lrcx) {
+        if (TextUtils.isEmpty(lrcx) || !lrcx.contains("<")) return lrcx;
+        ArrayList<Row> rows = new ArrayList<>();
+        for (String raw : lrcx.replace("\r", "").split("\n")) rows.add(new Row(raw));
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < rows.size(); i++) {
+            Row row = rows.get(i);
+            if (!row.hasWords()) {
+                builder.append(row.raw).append('\n');
+                continue;
+            }
+            long lineDuration = nextTime(rows, i) - row.timeMs;
+            builder.append(row.timeTag);
+            for (int j = 0; j < row.words.size(); j++) {
+                Word word = row.words.get(j);
+                long start = word.startMs();
+                long duration = duration(row, j, lineDuration);
+                builder.append('<').append(start).append(',').append(duration).append('>').append(word.text);
+            }
+            builder.append('\n');
+        }
+        return builder.toString();
+    }
+
+    private long duration(Row row, int index, long lineDuration) {
+        Word word = row.words.get(index);
+        long start = word.startMs();
+        if (index + 1 < row.words.size()) return Math.max(0, row.words.get(index + 1).startMs() - start);
+        long duration = Math.max(0, word.valueMs());
+        if (lineDuration > start) duration = duration > 0 ? Math.min(duration, lineDuration - start) : lineDuration - start;
+        return Math.min(Math.max(duration, 240), 3000);
+    }
+
+    private long nextTime(List<Row> rows, int index) {
+        for (int i = index + 1; i < rows.size(); i++) if (rows.get(i).timeMs >= 0) return rows.get(i).timeMs;
+        return -1;
     }
 
     private String lyricFromOpenApi(String id) {
@@ -242,10 +284,31 @@ public class KuwoClient {
         }
     }
 
+    private long parseLong(String value) {
+        try {
+            return Long.parseLong(value.trim());
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     private String formatTime(long timeMs) {
         long minute = timeMs / 60000;
         double second = (timeMs % 60000) / 1000.0;
         return String.format(Locale.US, "[%02d:%05.2f]", minute, second);
+    }
+
+    private long parseTime(Matcher matcher) {
+        long minute = parseLong(matcher.group(2));
+        long second = parseLong(matcher.group(3));
+        String fraction = matcher.group(4);
+        long millis = 0;
+        if (!TextUtils.isEmpty(fraction)) {
+            if (fraction.length() == 1) millis = parseLong(fraction) * 100;
+            else if (fraction.length() == 2) millis = parseLong(fraction) * 10;
+            else millis = parseLong(fraction.substring(0, 3));
+        }
+        return minute * 60_000 + second * 1000 + millis;
     }
 
     private static class Entry {
@@ -255,5 +318,63 @@ public class KuwoClient {
         private String album;
         private int durationSec;
         private int score;
+    }
+
+    private class Row {
+
+        private final String raw;
+        private final String timeTag;
+        private final long timeMs;
+        private final ArrayList<Word> words;
+
+        private Row(String raw) {
+            this.raw = raw == null ? "" : raw;
+            Matcher line = LRC_LINE.matcher(this.raw.trim());
+            if (!line.find()) {
+                timeTag = "";
+                timeMs = -1;
+                words = new ArrayList<>();
+                return;
+            }
+            timeTag = line.group(1);
+            timeMs = parseTime(line);
+            words = parseWords(line.group(5));
+        }
+
+        private boolean hasWords() {
+            return !words.isEmpty();
+        }
+
+        private ArrayList<Word> parseWords(String text) {
+            ArrayList<Word> items = new ArrayList<>();
+            Matcher matcher = LRCX_WORD.matcher(text == null ? "" : text);
+            while (matcher.find()) {
+                String value = matcher.group(3);
+                if (TextUtils.isEmpty(value)) continue;
+                items.add(new Word(parseLong(matcher.group(1)), parseLong(matcher.group(2)), value));
+            }
+            return items;
+        }
+    }
+
+    private static class Word {
+
+        private final long start;
+        private final long value;
+        private final String text;
+
+        private Word(long start, long value, String text) {
+            this.start = start;
+            this.value = value;
+            this.text = text == null ? "" : text;
+        }
+
+        private long startMs() {
+            return Math.max(0, Math.round(start / 3.0));
+        }
+
+        private long valueMs() {
+            return Math.max(0, Math.round(value / 3.0));
+        }
     }
 }
