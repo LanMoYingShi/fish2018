@@ -32,7 +32,7 @@ public class LyricsController {
     }
 
     public interface SearchCallback {
-        void onResult(List<LyricsResult> results);
+        void onResult(List<LyricsResult> results, boolean complete);
     }
 
     public LyricsController(LyricsOverlayView view) {
@@ -132,16 +132,16 @@ public class LyricsController {
 
     public void search(PlayerManager player, boolean audioOnly, String keyword, SearchCallback callback) {
         if (player == null || !audioOnly) {
-            if (callback != null) callback.onResult(Collections.emptyList());
+            if (callback != null) callback.onResult(Collections.emptyList(), true);
             return;
         }
         LyricsRequest request = LyricsRequest.from(player).withKeyword(keyword);
         if (!request.isValid()) {
-            if (callback != null) callback.onResult(Collections.emptyList());
+            if (callback != null) callback.onResult(Collections.emptyList(), true);
             return;
         }
-        repository.search(request, results -> {
-            if (callback != null) callback.onResult(results);
+        repository.search(request, (results, complete) -> {
+            if (callback != null) callback.onResult(results, complete);
         });
     }
 

@@ -151,6 +151,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private ParseAdapter mParseAdapter;
     private LyricsController mLyrics;
     private AlertDialog mLyricsResultDialog;
+    private android.widget.ArrayAdapter<String> mLyricsResultAdapter;
     private List<LyricsResult> mLyricsSearchResults;
     private String mLyricsSearchKeyword;
     private String mDetailLyrics;
@@ -1945,11 +1946,11 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         int seq = ++mLyricsSearchSeq;
         String cacheKey = getLyricsSearchCacheKey(keyword);
         if (TextUtils.equals(mLyricsSearchKeyword, cacheKey) && mLyricsSearchResults != null && !mLyricsSearchResults.isEmpty()) {
-            showLyricsResults(seq, cacheKey, mLyricsSearchResults);
+            showLyricsResults(seq, cacheKey, mLyricsSearchResults, true);
             return;
         }
         showLyricsSearching(seq);
-        mLyrics.search(player(), isAudioOnly() || isMusicLike(), keyword, results -> showLyricsResults(seq, cacheKey, results));
+        mLyrics.search(player(), isAudioOnly() || isMusicLike(), keyword, (results, complete) -> showLyricsResults(seq, cacheKey, results, complete));
     }
 
     private void showLyricsSearching(int seq) {
@@ -1971,28 +1972,47 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         dialog.show();
     }
 
-    private void showLyricsResults(int seq, String cacheKey, List<LyricsResult> results) {
+    private void showLyricsResults(int seq, String cacheKey, List<LyricsResult> results, boolean complete) {
         if (seq != mLyricsSearchSeq) return;
         if (isFinishing()) return;
-        dismissLyricsResultDialog();
         if (results == null || results.isEmpty()) {
-            Notify.show(R.string.player_lyrics_not_found);
+            if (complete) {
+                dismissLyricsResultDialog();
+                Notify.show(R.string.player_lyrics_not_found);
+            }
             return;
         }
         mLyricsSearchResults = results;
         mLyricsSearchKeyword = cacheKey;
         String[] labels = new String[results.size()];
         for (int i = 0; i < results.size(); i++) labels[i] = getLyricsResultLabel(results.get(i));
+        if (mLyricsResultDialog != null && mLyricsResultAdapter != null && mLyricsResultDialog.isShowing()) {
+            updateLyricsResultAdapter(labels);
+            return;
+        }
+        dismissLyricsResultDialog();
+        mLyricsResultAdapter = new android.widget.ArrayAdapter<>(this, android.R.layout.simple_list_item_single_choice, labels);
         AlertDialog dialog = new MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_WebHTV_LightDialog)
                 .setTitle(R.string.player_lyrics_select)
-                .setSingleChoiceItems(labels, -1, (d, which) -> applyLyrics(results.get(which)))
+                .setSingleChoiceItems(mLyricsResultAdapter, -1, (d, which) -> {
+                    if (which >= 0 && which < mLyricsSearchResults.size()) applyLyrics(mLyricsSearchResults.get(which));
+                })
                 .setNegativeButton(R.string.dialog_cancel, null)
                 .create();
         dialog.setOnDismissListener(d -> {
-            if (mLyricsResultDialog == dialog) mLyricsResultDialog = null;
+            if (mLyricsResultDialog == dialog) {
+                mLyricsResultDialog = null;
+                mLyricsResultAdapter = null;
+            }
         });
         mLyricsResultDialog = dialog;
         dialog.show();
+    }
+
+    private void updateLyricsResultAdapter(String[] labels) {
+        mLyricsResultAdapter.clear();
+        mLyricsResultAdapter.addAll(labels);
+        mLyricsResultAdapter.notifyDataSetChanged();
     }
 
     private void applyLyrics(LyricsResult result) {
@@ -2016,6 +2036,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (mLyricsResultDialog == null) return;
         mLyricsResultDialog.dismiss();
         mLyricsResultDialog = null;
+        mLyricsResultAdapter = null;
     }
 
     private void setDetailLyrics(String text) {

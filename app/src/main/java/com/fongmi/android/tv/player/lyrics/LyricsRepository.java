@@ -27,7 +27,7 @@ public class LyricsRepository {
     }
 
     public interface SearchCallback {
-        void onResult(List<LyricsResult> results);
+        void onResult(List<LyricsResult> results, boolean complete);
     }
 
     private static final String TAG = "lyrics";
@@ -53,15 +53,21 @@ public class LyricsRepository {
 
     public void search(LyricsRequest request, SearchCallback callback) {
         Task.execute(() -> {
-            List<LyricsResult> results;
+            int sourceMode = LyricsSetting.getSourceMode();
+            List<LyricsResult> cached = readSearchCache(request, sourceMode);
+            if (!cached.isEmpty()) postSearch(callback, cached, false);
             try {
-                results = searchSync(request);
+                if (sourceMode == LyricsSetting.SOURCE_AUTO) searchAuto(request, sourceMode, cached, callback);
+                else {
+                    List<LyricsResult> results = searchSync(request);
+                    if (results.isEmpty() && !cached.isEmpty()) results = cached;
+                    writeSearchCache(request, sourceMode, results);
+                    postSearch(callback, results, true);
+                }
             } catch (Throwable e) {
                 if (SpiderDebug.isEnabled()) SpiderDebug.log(TAG, "search failed title=%s error=%s", request.getTitle(), e.getMessage());
-                results = List.of();
+                postSearch(callback, List.of(), true);
             }
-            List<LyricsResult> finalResults = results;
-            App.post(() -> callback.onResult(finalResults));
         });
     }
 
@@ -208,6 +214,20 @@ public class LyricsRepository {
         return sorted(results, 24);
     }
 
+    private void searchAuto(LyricsRequest request, int sourceMode, List<LyricsResult> cached, SearchCallback callback) {
+        ArrayList<LyricsResult> results = new ArrayList<>(cached == null ? List.of() : cached);
+        ArrayList<SearchFuture> futures = new ArrayList<>();
+        add(results, readLocal(request));
+        if (!results.isEmpty() && (cached == null || cached.isEmpty())) postSearch(callback, sorted(results, 24), false);
+        addSearch(futures, "QQMusic", () -> qqMusic.findAll(request, 4));
+        addSearch(futures, "AMLL TTML", () -> one(ttml.find(request)));
+        addSearch(futures, "Netease", () -> netease.findAll(request, 4));
+        addSearch(futures, "Kuwo", () -> kuwo.findAll(request, 4));
+        addSearch(futures, "Kugou", () -> kugou.findAll(request, 4));
+        addSearch(futures, "LRCLIB", () -> matcher.all(request, client.findCandidates(request), 6));
+        collectSearchProgressive(request, sourceMode, results, futures, callback);
+    }
+
     private LyricsResult loadSource(LyricsRequest request, int sourceMode, LyricsResult local) {
         LyricsResult result = switch (sourceMode) {
             case LyricsSetting.SOURCE_LOCAL -> local;
@@ -284,6 +304,51 @@ public class LyricsRepository {
         }
     }
 
+    private void collectSearchProgressive(LyricsRequest request, int sourceMode, List<LyricsResult> results, List<SearchFuture> futures, SearchCallback callback) {
+        long deadline = System.currentTimeMillis() + 22000;
+        int lastCount = results.size();
+        while (!futures.isEmpty() && System.currentTimeMillis() < deadline) {
+            boolean changed = false;
+            for (int i = futures.size() - 1; i >= 0; i--) {
+                SearchFuture item = futures.get(i);
+                if (!item.future.isDone()) continue;
+                futures.remove(i);
+                try {
+                    addAll(results, item.future.get());
+                    changed = true;
+                } catch (Throwable e) {
+                    if (SpiderDebug.isEnabled()) SpiderDebug.log(TAG, "search source=%s failed error=%s", item.source, e.getMessage());
+                }
+            }
+            List<LyricsResult> sorted = sorted(results, 24);
+            if (changed && sorted.size() != lastCount) {
+                lastCount = sorted.size();
+                postSearch(callback, sorted, false);
+            }
+            if (!changed) sleepSearch();
+        }
+        for (SearchFuture item : futures) {
+            item.future.cancel(true);
+            if (SpiderDebug.isEnabled()) SpiderDebug.log(TAG, "search source=%s timeout", item.source);
+        }
+        List<LyricsResult> sorted = sorted(results, 24);
+        writeSearchCache(request, sourceMode, sorted);
+        postSearch(callback, sorted, true);
+    }
+
+    private void sleepSearch() {
+        try {
+            Thread.sleep(120);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void postSearch(SearchCallback callback, List<LyricsResult> results, boolean complete) {
+        List<LyricsResult> finalResults = results == null ? List.of() : new ArrayList<>(results);
+        App.post(() -> callback.onResult(finalResults, complete));
+    }
+
     private List<LyricsResult> one(LyricsResult result) {
         ArrayList<LyricsResult> results = new ArrayList<>();
         add(results, result);
@@ -336,6 +401,26 @@ public class LyricsRepository {
             return App.gson().fromJson(Path.read(file), LyricsResult.class);
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    private List<LyricsResult> readSearchCache(LyricsRequest request, int sourceMode) {
+        File file = searchCacheFile(request, sourceMode);
+        if (!Path.exists(file)) return List.of();
+        ArrayList<LyricsResult> results = new ArrayList<>();
+        try {
+            LyricsResult[] items = App.gson().fromJson(Path.read(file), LyricsResult[].class);
+            if (items != null) for (LyricsResult item : items) if (item != null && item.isValid() && item.isCacheCurrent()) results.add(item);
+        } catch (Exception e) {
+            return List.of();
+        }
+        return sorted(results, 24);
+    }
+
+    private void writeSearchCache(LyricsRequest request, int sourceMode, List<LyricsResult> results) {
+        try {
+            Path.write(searchCacheFile(request, sourceMode), App.gson().toJson(results == null ? List.of() : results).getBytes(StandardCharsets.UTF_8));
+        } catch (Exception ignored) {
         }
     }
 
@@ -406,6 +491,13 @@ public class LyricsRepository {
         if (!dir.exists()) dir.mkdirs();
         String suffix = LyricsSetting.cacheSuffix(sourceMode);
         return new File(dir, request.signature() + (suffix.isEmpty() ? "" : "-" + suffix) + ".json");
+    }
+
+    private File searchCacheFile(LyricsRequest request, int sourceMode) {
+        File dir = Path.cache("lyrics");
+        if (!dir.exists()) dir.mkdirs();
+        String suffix = LyricsSetting.cacheSuffix(sourceMode);
+        return new File(dir, request.signature() + (suffix.isEmpty() ? "" : "-" + suffix) + "-search.json");
     }
 
     private File choiceFile(LyricsRequest request) {
