@@ -11,7 +11,6 @@ import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.style.ForegroundColorSpan;
 import android.text.style.ReplacementSpan;
-import android.text.style.StyleSpan;
 import android.util.AttributeSet;
 import android.view.Gravity;
 import android.view.View;
@@ -215,7 +214,7 @@ public class LyricsOverlayView extends FrameLayout {
             int stop = Math.min(text.length(), start + value.length());
             if (stop <= start) continue;
             if (relativeMs >= word.getEndOffsetMs()) {
-                setHighlight(span, start, stop);
+                span.setSpan(new KaraokeSpan(PRIMARY_COLOR, 1f), start, stop, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             } else if (relativeMs >= word.getStartOffsetMs()) {
                 float progress = word.getDurationMs() <= 0 ? 1f : Math.min(1f, Math.max(0f, (relativeMs - word.getStartOffsetMs()) / (float) word.getDurationMs()));
                 span.setSpan(new KaraokeSpan(PRIMARY_COLOR, progress), start, stop, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
@@ -225,11 +224,6 @@ public class LyricsOverlayView extends FrameLayout {
             }
             cursor = stop;
         }
-    }
-
-    private void setHighlight(SpannableString span, int start, int stop) {
-        span.setSpan(new ForegroundColorSpan(PRIMARY_COLOR), start, stop, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        span.setSpan(new StyleSpan(Typeface.BOLD), start, stop, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
     }
 
     private void renderPrimaryLine(long positionMs) {
