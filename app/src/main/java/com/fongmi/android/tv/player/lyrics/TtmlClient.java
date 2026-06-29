@@ -211,20 +211,7 @@ public class TtmlClient {
     }
 
     private List<String> keywords(LyricsRequest request) {
-        List<String> keywords = new ArrayList<>();
-        String title = request.getTitle();
-        String artist = request.getArtist();
-        if (!TextUtils.isEmpty(title) && !TextUtils.isEmpty(artist)) {
-            addKeyword(keywords, title + " - " + artist);
-            addKeyword(keywords, title + " " + artist);
-        }
-        addKeyword(keywords, title);
-        return keywords;
-    }
-
-    private void addKeyword(List<String> keywords, String keyword) {
-        String value = keyword == null ? "" : keyword.trim();
-        if (!TextUtils.isEmpty(value) && !keywords.contains(value)) keywords.add(value);
+        return request.searchKeywords();
     }
 
     private int textScore(String wanted, String actual, int exact, int contains, int mismatch) {

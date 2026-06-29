@@ -4,7 +4,9 @@ import android.text.TextUtils;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -13,6 +15,7 @@ public class LyricsParser {
     private static final Pattern TIME = Pattern.compile("\\[(\\d{1,3}):(\\d{2})(?:[.:](\\d{1,3}))?]");
     private static final Pattern WORD_TIME = Pattern.compile("<\\d+,-?\\d+>");
     private static final Pattern WORD_TOKEN = Pattern.compile("<(\\d+),(-?\\d+)>([^<]*)");
+    private static final long AUX_TOLERANCE_MS = 800;
 
     private static class Mark {
 
@@ -38,8 +41,42 @@ public class LyricsParser {
         }
     }
 
+    private static class AuxLine {
+
+        private final long time;
+        private final String text;
+
+        private AuxLine(long time, String text) {
+            this.time = time;
+            this.text = text;
+        }
+    }
+
     public static boolean hasTimedLine(String text) {
         return !TextUtils.isEmpty(text) && TIME.matcher(text).find();
+    }
+
+    public static String mergeTimedText(String primary, String... auxiliaries) {
+        if (TextUtils.isEmpty(primary) || auxiliaries == null || auxiliaries.length == 0) return primary;
+        List<AuxLine> auxLines = new ArrayList<>();
+        for (String auxiliary : auxiliaries) collectAuxLines(auxLines, auxiliary);
+        if (auxLines.isEmpty()) return primary;
+        auxLines.sort(Comparator.comparingLong(item -> item.time));
+
+        StringBuilder builder = new StringBuilder();
+        Set<Integer> used = new HashSet<>();
+        for (String raw : primary.replace("\r", "").split("\n")) {
+            long time = firstTime(raw);
+            if (time < 0) {
+                builder.append(raw).append('\n');
+                continue;
+            }
+            String auxiliary = findAuxLine(raw, time, auxLines, used);
+            builder.append(raw);
+            if (!TextUtils.isEmpty(auxiliary)) builder.append("\\n").append(auxiliary);
+            builder.append('\n');
+        }
+        return builder.toString();
     }
 
     public static List<LyricsLine> parseTimed(String text) {
@@ -141,7 +178,7 @@ public class LyricsParser {
     }
 
     private static String cleanLyric(String text) {
-        return WORD_TIME.matcher(text == null ? "" : text).replaceAll("").trim();
+        return WORD_TIME.matcher(text == null ? "" : text).replaceAll("").replace("\\n", "\n").trim();
     }
 
     private static Content parseContent(String raw) {
@@ -176,5 +213,51 @@ public class LyricsParser {
 
     private static boolean sameWords(LyricsLine line, List<LyricsLine> output) {
         return !output.isEmpty() && line.getWords().equals(output.get(output.size() - 1).getWords());
+    }
+
+    private static void collectAuxLines(List<AuxLine> output, String text) {
+        if (TextUtils.isEmpty(text)) return;
+        for (String raw : text.replace("\r", "").split("\n")) {
+            List<Mark> marks = new ArrayList<>();
+            Matcher matcher = TIME.matcher(raw);
+            while (matcher.find()) marks.add(new Mark(parseTime(matcher), matcher.start(), matcher.end()));
+            if (marks.isEmpty()) continue;
+            Content content = parseContent(raw.substring(marks.get(marks.size() - 1).end));
+            if (content.text.isEmpty()) continue;
+            for (Mark mark : marks) output.add(new AuxLine(mark.time, content.text));
+        }
+    }
+
+    private static long firstTime(String raw) {
+        Matcher matcher = TIME.matcher(raw == null ? "" : raw);
+        return matcher.find() ? parseTime(matcher) : -1;
+    }
+
+    private static String findAuxLine(String raw, long time, List<AuxLine> auxLines, Set<Integer> used) {
+        List<String> texts = new ArrayList<>();
+        String primary = LyricsMatcher.normalize(cleanTimedLyric(raw));
+        for (int i = 0; i < auxLines.size(); i++) {
+            if (used.contains(i)) continue;
+            AuxLine line = auxLines.get(i);
+            long delta = Math.abs(line.time - time);
+            if (delta > AUX_TOLERANCE_MS) continue;
+            if (LyricsMatcher.normalize(line.text).equals(primary)) {
+                used.add(i);
+                continue;
+            }
+            if (!containsNormalized(texts, line.text)) texts.add(line.text);
+            used.add(i);
+        }
+        return TextUtils.join(" / ", texts);
+    }
+
+    private static boolean containsNormalized(List<String> texts, String text) {
+        String target = LyricsMatcher.normalize(text);
+        for (String item : texts) if (LyricsMatcher.normalize(item).equals(target)) return true;
+        return false;
+    }
+
+    private static String cleanTimedLyric(String text) {
+        return cleanLyric(TIME.matcher(text == null ? "" : text).replaceAll(""));
     }
 }

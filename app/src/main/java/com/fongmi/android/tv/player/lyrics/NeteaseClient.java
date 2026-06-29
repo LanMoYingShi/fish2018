@@ -58,6 +58,7 @@ public class NeteaseClient {
         String text = !TextUtils.isEmpty(lyric.yrc) ? yrcToEnhancedLrc(lyric.yrc) : "";
         if (!LyricsParser.hasTimedLine(text)) text = lyric.lrc;
         if (!LyricsParser.hasTimedLine(text)) return null;
+        text = LyricsParser.mergeTimedText(text, auxToLrc(lyric.trans), auxToLrc(lyric.roma));
         return new LyricsResult("Netease", entry.name, entry.artist, entry.album, text, entry.durationSec * 1000L, true, entry.score);
     }
 
@@ -143,8 +144,12 @@ public class NeteaseClient {
             JSONObject object = new JSONObject(get(url.toString()));
             JSONObject yrc = object.optJSONObject("yrc");
             JSONObject lrc = object.optJSONObject("lrc");
+            JSONObject trans = firstObject(object, "tlyric", "ytlrc");
+            JSONObject roma = firstObject(object, "romalrc", "yromalrc");
             lyric.yrc = yrc == null ? "" : yrc.optString("lyric");
             lyric.lrc = lrc == null ? "" : lrc.optString("lyric");
+            lyric.trans = trans == null ? "" : trans.optString("lyric");
+            lyric.roma = roma == null ? "" : roma.optString("lyric");
         } catch (Exception e) {
             if (SpiderDebug.isEnabled()) SpiderDebug.log(TAG, "netease lyric failed id=%s error=%s", id, e.getMessage());
         }
@@ -175,26 +180,35 @@ public class NeteaseClient {
         return builder.toString();
     }
 
+    private String auxToLrc(String lyric) {
+        if (TextUtils.isEmpty(lyric)) return "";
+        if (LyricsParser.hasTimedLine(lyric)) return lyric;
+        StringBuilder builder = new StringBuilder();
+        for (String raw : lyric.replace("\r", "").split("\n")) {
+            String line = raw.trim();
+            if (line.isEmpty()) continue;
+            Matcher lineMatcher = YRC_LINE.matcher(line);
+            if (!lineMatcher.find()) continue;
+            String text = cleanYrcText(lineMatcher.group(3));
+            if (!TextUtils.isEmpty(text)) builder.append(formatTime(parseLong(lineMatcher.group(1)))).append(text).append('\n');
+        }
+        return builder.toString();
+    }
+
+    private String cleanYrcText(String text) {
+        StringBuilder builder = new StringBuilder();
+        Matcher matcher = YRC_WORD.matcher(text == null ? "" : text);
+        while (matcher.find()) builder.append(matcher.group(3));
+        return clean(builder.length() > 0 ? builder.toString() : text);
+    }
+
     private long normalizeWordStart(long start, long lineStart, long lineDuration) {
         if (lineStart > 2000 && start >= lineStart && (lineDuration <= 0 || start <= lineStart + lineDuration + 500)) return Math.max(0, start - lineStart);
         return Math.max(0, start);
     }
 
     private List<String> keywords(LyricsRequest request) {
-        List<String> keywords = new ArrayList<>();
-        String title = request.getTitle();
-        String artist = request.getArtist();
-        if (!TextUtils.isEmpty(title) && !TextUtils.isEmpty(artist)) {
-            addKeyword(keywords, title + " - " + artist);
-            addKeyword(keywords, title + " " + artist);
-        }
-        addKeyword(keywords, title);
-        return keywords;
-    }
-
-    private void addKeyword(List<String> keywords, String keyword) {
-        String value = keyword == null ? "" : keyword.trim();
-        if (!TextUtils.isEmpty(value) && !keywords.contains(value)) keywords.add(value);
+        return request.searchKeywords();
     }
 
     private int textScore(String wanted, String actual, int exact, int contains, int mismatch) {
@@ -242,6 +256,14 @@ public class NeteaseClient {
         return TextUtils.join(" / ", names);
     }
 
+    private JSONObject firstObject(JSONObject object, String... keys) {
+        for (String key : keys) {
+            JSONObject value = object.optJSONObject(key);
+            if (value != null && !TextUtils.isEmpty(value.optString("lyric"))) return value;
+        }
+        return null;
+    }
+
     private String clean(String text) {
         return Uri.decode(text == null ? "" : text)
                 .replace("&nbsp;", " ")
@@ -275,5 +297,7 @@ public class NeteaseClient {
     private static class Lyric {
         private String yrc;
         private String lrc;
+        private String trans;
+        private String roma;
     }
 }

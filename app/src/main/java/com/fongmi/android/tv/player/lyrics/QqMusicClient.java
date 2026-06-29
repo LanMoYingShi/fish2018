@@ -75,6 +75,7 @@ public class QqMusicClient {
         String text = !TextUtils.isEmpty(lyric.qrc) ? qrcToEnhancedLrc(lyric.qrc) : "";
         if (!LyricsParser.hasTimedLine(text)) text = lyric.lrc;
         if (!LyricsParser.hasTimedLine(text)) return null;
+        text = LyricsParser.mergeTimedText(text, qrcTextToLrc(lyric.trans), qrcTextToLrc(lyric.roma));
         return new LyricsResult("QQMusic", entry.name, entry.artist, entry.album, text, entry.durationSec * 1000L, true, entry.score);
     }
 
@@ -153,20 +154,7 @@ public class QqMusicClient {
     }
 
     private List<String> keywords(LyricsRequest request) {
-        List<String> keywords = new ArrayList<>();
-        String title = request.getTitle();
-        String artist = request.getArtist();
-        if (!TextUtils.isEmpty(title) && !TextUtils.isEmpty(artist)) {
-            addKeyword(keywords, title + " - " + artist);
-            addKeyword(keywords, title + " " + artist);
-        }
-        addKeyword(keywords, title);
-        return keywords;
-    }
-
-    private void addKeyword(List<String> keywords, String keyword) {
-        String value = keyword == null ? "" : keyword.trim();
-        if (!TextUtils.isEmpty(value) && !keywords.contains(value)) keywords.add(value);
+        return request.searchKeywords();
     }
 
     private int textScore(String wanted, String actual, int exact, int contains, int mismatch) {
@@ -381,6 +369,31 @@ public class QqMusicClient {
             if (words.length() > 0) builder.append(formatTime(lineStart)).append(words).append('\n');
         }
         return builder.toString();
+    }
+
+    private String qrcTextToLrc(String qrc) {
+        String content = extractLyricContent(qrc);
+        StringBuilder builder = new StringBuilder();
+        for (String raw : content.replace("\r", "").split("\n")) {
+            String line = raw.trim();
+            if (line.isEmpty() || line.startsWith("[ti:") || line.startsWith("[ar:") || line.startsWith("[al:") || line.startsWith("[by:")) continue;
+            Matcher qrcMatcher = QRC_LINE.matcher(line);
+            if (qrcMatcher.find()) {
+                String text = cleanQrcLine(qrcMatcher.group(3));
+                if (!TextUtils.isEmpty(text)) builder.append(formatTime(parseLong(qrcMatcher.group(1)))).append(text).append('\n');
+                continue;
+            }
+            if (LyricsParser.hasTimedLine(line)) builder.append(line).append('\n');
+        }
+        return builder.toString();
+    }
+
+    private String cleanQrcLine(String text) {
+        StringBuilder builder = new StringBuilder();
+        Matcher matcher = QRC_WORD.matcher(text == null ? "" : text);
+        while (matcher.find()) builder.append(matcher.group(1));
+        String value = builder.length() > 0 ? builder.toString() : text;
+        return clean(value);
     }
 
     private long normalizeWordStart(long start, long lineStart, long lineDuration) {

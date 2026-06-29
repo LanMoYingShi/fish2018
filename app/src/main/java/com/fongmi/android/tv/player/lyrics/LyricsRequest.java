@@ -10,6 +10,9 @@ import com.fongmi.android.tv.player.PlayerManager;
 import com.github.catvod.utils.Util;
 
 import java.io.File;
+import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -65,6 +68,20 @@ public class LyricsRequest {
         return artist + " - " + title;
     }
 
+    public List<String> searchKeywords() {
+        List<String> keywords = new ArrayList<>();
+        String name = clean(title);
+        String singer = clean(artist);
+        addKeyword(keywords, singer, " - ", name);
+        addKeyword(keywords, name, " - ", singer);
+        addKeyword(keywords, singer, " ", name);
+        addKeyword(keywords, name, " ", singer);
+        addKeyword(keywords, name);
+        addKeyword(keywords, stripSearchNoise(name));
+        addKeyword(keywords, normalizeSearchText(name));
+        return keywords;
+    }
+
     public String getKey() {
         return key;
     }
@@ -103,6 +120,37 @@ public class LyricsRequest {
 
     private static String clean(String text) {
         return Objects.toString(text, "").trim();
+    }
+
+    private static void addKeyword(List<String> keywords, String... parts) {
+        StringBuilder builder = new StringBuilder();
+        for (String part : parts) {
+            String value = clean(part);
+            if (TextUtils.isEmpty(value)) return;
+            builder.append(value);
+        }
+        String keyword = builder.toString().replaceAll("\\s+", " ").trim();
+        if (!TextUtils.isEmpty(keyword) && !containsKeyword(keywords, keyword)) keywords.add(keyword);
+    }
+
+    private static boolean containsKeyword(List<String> keywords, String keyword) {
+        String normalized = normalizeSearchText(keyword);
+        for (String item : keywords) if (normalizeSearchText(item).equals(normalized)) return true;
+        return false;
+    }
+
+    private static String stripSearchNoise(String text) {
+        String value = clean(text);
+        value = value.replaceAll("\\([^)]*\\)|\\[[^]]*]|（[^）]*）|【[^】]*】", " ");
+        value = value.replaceAll("(?i)\\b(tv size|short ver\\.?|full ver\\.?|instrumental|karaoke|off vocal|cover|remix|live)\\b", " ");
+        return value.replaceAll("\\s+", " ").trim();
+    }
+
+    private static String normalizeSearchText(String text) {
+        return Normalizer.normalize(stripSearchNoise(text), Normalizer.Form.NFKC)
+                .replace('　', ' ')
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 
     private static String cleanArtist(String text) {

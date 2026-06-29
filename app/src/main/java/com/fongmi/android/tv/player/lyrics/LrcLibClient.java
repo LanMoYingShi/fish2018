@@ -35,6 +35,7 @@ public class LrcLibClient {
         add(entries, exact(request, false));
         entries.addAll(search(request, true));
         if (!TextUtils.isEmpty(request.getArtist())) entries.addAll(search(request, false));
+        for (String keyword : request.searchKeywords()) entries.addAll(search(keyword));
         return entries;
     }
 
@@ -52,6 +53,13 @@ public class LrcLibClient {
         if (TextUtils.isEmpty(request.getTitle())) return new ArrayList<>();
         HttpUrl.Builder builder = HttpUrl.parse(BASE + "/search").newBuilder().addQueryParameter("track_name", request.getTitle());
         if (withArtist && !TextUtils.isEmpty(request.getArtist())) builder.addQueryParameter("artist_name", request.getArtist());
+        List<Entry> result = get(builder.build().toString(), LIST_TYPE);
+        return result == null ? new ArrayList<>() : result;
+    }
+
+    private List<Entry> search(String keyword) {
+        if (TextUtils.isEmpty(keyword)) return new ArrayList<>();
+        HttpUrl.Builder builder = HttpUrl.parse(BASE + "/search").newBuilder().addQueryParameter("q", keyword);
         List<Entry> result = get(builder.build().toString(), LIST_TYPE);
         return result == null ? new ArrayList<>() : result;
     }
