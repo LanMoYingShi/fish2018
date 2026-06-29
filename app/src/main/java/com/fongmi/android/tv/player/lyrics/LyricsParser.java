@@ -12,6 +12,7 @@ public class LyricsParser {
 
     private static final Pattern TIME = Pattern.compile("\\[(\\d{1,3}):(\\d{2})(?:[.:](\\d{1,3}))?]");
     private static final Pattern WORD_TIME = Pattern.compile("<\\d+,-?\\d+>");
+    private static final Pattern WORD_TOKEN = Pattern.compile("<(\\d+),(-?\\d+)>([^<]*)");
 
     private static class Mark {
 
@@ -23,6 +24,17 @@ public class LyricsParser {
             this.time = time;
             this.start = start;
             this.end = end;
+        }
+    }
+
+    private static class Content {
+
+        private final String text;
+        private final List<LyricsWord> words;
+
+        private Content(String text, List<LyricsWord> words) {
+            this.text = text;
+            this.words = words;
         }
     }
 
@@ -102,19 +114,19 @@ public class LyricsParser {
 
     private static void addLine(List<LyricsLine> lines, String raw, List<Mark> marks) {
         if (isPrefixTimed(raw, marks)) {
-            String lyric = cleanLyric(raw.substring(marks.get(marks.size() - 1).end));
-            if (lyric.isEmpty()) return;
-            for (Mark mark : marks) lines.add(new LyricsLine(mark.time, lyric));
+            Content content = parseContent(raw.substring(marks.get(marks.size() - 1).end));
+            if (content.text.isEmpty()) return;
+            for (Mark mark : marks) lines.add(new LyricsLine(mark.time, content.text, content.words));
             return;
         }
         List<Long> pending = new ArrayList<>();
         for (int i = 0; i < marks.size(); i++) {
             Mark mark = marks.get(i);
             int next = i + 1 < marks.size() ? marks.get(i + 1).start : raw.length();
-            String lyric = cleanLyric(raw.substring(mark.end, next));
+            Content content = parseContent(raw.substring(mark.end, next));
             pending.add(mark.time);
-            if (lyric.isEmpty()) continue;
-            for (long time : pending) lines.add(new LyricsLine(time, lyric));
+            if (content.text.isEmpty()) continue;
+            for (long time : pending) lines.add(new LyricsLine(time, content.text, content.words));
             pending.clear();
         }
     }
@@ -132,16 +144,37 @@ public class LyricsParser {
         return WORD_TIME.matcher(text == null ? "" : text).replaceAll("").trim();
     }
 
+    private static Content parseContent(String raw) {
+        String source = raw == null ? "" : raw;
+        List<LyricsWord> words = parseWords(source);
+        return new Content(cleanLyric(source), words);
+    }
+
+    private static List<LyricsWord> parseWords(String raw) {
+        List<LyricsWord> words = new ArrayList<>();
+        Matcher matcher = WORD_TOKEN.matcher(raw == null ? "" : raw);
+        while (matcher.find()) {
+            String text = matcher.group(3);
+            if (TextUtils.isEmpty(text)) continue;
+            words.add(new LyricsWord(parseLong(matcher.group(1)), parseLong(matcher.group(2)), text));
+        }
+        return words;
+    }
+
     private static List<LyricsLine> compact(List<LyricsLine> input) {
         List<LyricsLine> output = new ArrayList<>();
         String last = null;
         long lastTime = -1;
         for (LyricsLine line : input) {
-            if (line.getText().equals(last) && line.getTimeMs() == lastTime) continue;
+            if (line.getText().equals(last) && line.getTimeMs() == lastTime && sameWords(line, output)) continue;
             output.add(line);
             last = line.getText();
             lastTime = line.getTimeMs();
         }
         return output;
+    }
+
+    private static boolean sameWords(LyricsLine line, List<LyricsLine> output) {
+        return !output.isEmpty() && line.getWords().equals(output.get(output.size() - 1).getWords());
     }
 }
