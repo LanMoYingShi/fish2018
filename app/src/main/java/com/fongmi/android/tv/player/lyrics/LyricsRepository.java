@@ -77,6 +77,10 @@ public class LyricsRepository {
     }
 
     private void load(LyricsRequest request, boolean preferWord, boolean forceRefresh, Callback callback) {
+        if (preferWord && !forceRefresh && LyricsSetting.getSourceMode() == LyricsSetting.SOURCE_AUTO) {
+            loadProgressive(request, callback);
+            return;
+        }
         Task.execute(() -> {
             LyricsResult result = null;
             try {
@@ -87,6 +91,57 @@ public class LyricsRepository {
             LyricsResult finalResult = result;
             App.post(() -> callback.onResult(finalResult));
         });
+    }
+
+    private void loadProgressive(LyricsRequest request, Callback callback) {
+        Task.execute(() -> {
+            LyricsResult early = null;
+            LyricsResult result = null;
+            try {
+                early = loadQuickSync(request);
+                if (early != null && early.isValid()) {
+                    LyricsResult finalEarly = early;
+                    App.post(() -> callback.onResult(finalEarly));
+                }
+            } catch (Throwable e) {
+                if (SpiderDebug.isEnabled()) SpiderDebug.log(TAG, "quick load failed title=%s error=%s", request.getTitle(), e.getMessage());
+            }
+            try {
+                result = loadSync(request, true, false);
+            } catch (Throwable e) {
+                if (SpiderDebug.isEnabled()) SpiderDebug.log(TAG, "progressive load failed title=%s error=%s", request.getTitle(), e.getMessage());
+            }
+            LyricsResult finalResult = result;
+            if (shouldNotifyProgress(early, finalResult)) App.post(() -> callback.onResult(finalResult));
+            else if ((early == null || !early.isValid()) && (finalResult == null || !finalResult.isValid())) App.post(() -> callback.onResult(null));
+        });
+    }
+
+    private LyricsResult loadQuickSync(LyricsRequest request) {
+        int sourceMode = LyricsSetting.getSourceMode();
+        LyricsResult choice = readChoice(request);
+        if (choice != null && choice.isValid() && choice.isCacheCurrent()) return choice;
+        LyricsResult local = readLocal(request);
+        if (local != null && local.isValid()) {
+            writeCache(request, sourceMode, local);
+            return local;
+        }
+        LyricsResult cached = readCache(request, sourceMode);
+        if (cached != null && cached.isValid() && cached.isCacheCurrent()) return cached;
+        LyricsResult lrclib = matcher.best(request, client.findCandidates(request));
+        if (lrclib != null && lrclib.isValid()) {
+            writeCache(request, sourceMode, lrclib);
+            if (SpiderDebug.isEnabled()) SpiderDebug.log(TAG, "quick match title=%s artist=%s result=%s score=%d", request.getTitle(), request.getArtist(), lrclib.getSource(), lrclib.getScore());
+        }
+        return lrclib;
+    }
+
+    private boolean shouldNotifyProgress(LyricsResult early, LyricsResult result) {
+        if (result == null || !result.isValid()) return false;
+        if (early == null || !early.isValid()) return true;
+        if (sameResult(early, result)) return false;
+        if (result.hasWordTiming() && !early.hasWordTiming()) return true;
+        return weightedScore(result) > weightedScore(early) + 10;
     }
 
     private LyricsResult loadSync(LyricsRequest request, boolean preferWord, boolean forceRefresh) {
@@ -218,6 +273,11 @@ public class LyricsRepository {
                 LyricsMatcher.normalize(result.getTrackName()),
                 LyricsMatcher.normalize(result.getArtistName()),
                 String.valueOf(duration));
+    }
+
+    private boolean sameResult(LyricsResult first, LyricsResult second) {
+        if (first == null || second == null) return first == second;
+        return TextUtils.equals(resultKey(first), resultKey(second)) && TextUtils.equals(first.getLyrics(), second.getLyrics());
     }
 
     private String safe(String text) {
