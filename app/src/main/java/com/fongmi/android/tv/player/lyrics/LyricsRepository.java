@@ -131,13 +131,19 @@ public class LyricsRepository {
     private LyricsResult loadQuickSync(LyricsRequest request) {
         int sourceMode = LyricsSetting.getSourceMode();
         LyricsResult choice = readChoice(request);
-        if (choice != null && choice.isValid() && choice.isCacheCurrent()) return choice;
+        if (isTrustedWord(choice)) return choice;
         LyricsResult local = readLocal(request);
-        if (local != null && local.isValid()) {
+        if (local != null && local.isValid() && local.hasWordTiming()) {
             writeCache(request, sourceMode, local);
             return local;
         }
         LyricsResult cached = readCache(request, sourceMode);
+        if (cached != null && cached.isValid() && cached.isCacheCurrent() && isTrustedWord(cached)) return cached;
+        if (choice != null && choice.isValid() && choice.isCacheCurrent()) return choice;
+        if (local != null && local.isValid()) {
+            writeCache(request, sourceMode, local);
+            return local;
+        }
         if (cached != null && cached.isValid() && cached.isCacheCurrent()) return cached;
         LyricsResult lrclib = matcher.best(request, client.findCandidates(request));
         if (lrclib != null && lrclib.isValid()) {
@@ -158,10 +164,11 @@ public class LyricsRepository {
     private LyricsResult loadSync(LyricsRequest request, boolean preferWord, boolean forceRefresh) {
         int sourceMode = LyricsSetting.getSourceMode();
         LyricsResult choice = forceRefresh ? null : readChoice(request);
-        if (choice != null && choice.isValid() && choice.isCacheCurrent()) return choice;
+        if (choice != null && choice.isValid() && choice.isCacheCurrent() && (!preferWord || isTrustedWord(choice))) return choice;
         LyricsResult cached = forceRefresh ? null : readCache(request, sourceMode);
         if (cached != null && cached.isValid() && cached.isCacheCurrent() && (!preferWord || isTrustedWord(cached))) return cached;
-        LyricsResult remote = cached != null && cached.isValid() && cached.isCacheCurrent() ? cached : null;
+        LyricsResult remote = choice != null && choice.isValid() && choice.isCacheCurrent() ? choice : null;
+        if (cached != null && cached.isValid() && cached.isCacheCurrent() && shouldUseRemote(remote, cached)) remote = cached;
         LyricsResult local = readLocal(request);
         if (sourceMode != LyricsSetting.SOURCE_AUTO) return loadSource(request, sourceMode, local);
         if (local != null && local.isValid()) {
@@ -171,14 +178,14 @@ public class LyricsRepository {
             }
             if (shouldUseRemote(remote, local)) remote = local;
         }
-        LyricsResult qq = qqMusic.find(request);
-        if (shouldUseRemote(remote, qq)) remote = qq;
         LyricsResult ttmlResult = ttml.find(request);
         if (shouldUseRemote(remote, ttmlResult)) remote = ttmlResult;
-        LyricsResult cloud = netease.find(request);
-        if (shouldUseRemote(remote, cloud)) remote = cloud;
         LyricsResult kuwoResult = kuwo.find(request);
         if (shouldUseRemote(remote, kuwoResult)) remote = kuwoResult;
+        LyricsResult qq = qqMusic.find(request);
+        if (shouldUseRemote(remote, qq)) remote = qq;
+        LyricsResult cloud = netease.find(request);
+        if (shouldUseRemote(remote, cloud)) remote = cloud;
         LyricsResult kugouResult = kugou.find(request);
         if (shouldUseRemote(remote, kugouResult)) remote = kugouResult;
         LyricsResult miguResult = migu.find(request);
@@ -277,11 +284,11 @@ public class LyricsRepository {
         String source = result == null || result.getSource() == null ? "" : result.getSource();
         if (source.contains("Local TTML")) return 60;
         if (source.contains("AMLL TTML")) return 50;
+        if (source.contains("Kuwo")) return 48;
         if (source.contains("QQMusic")) return 45;
-        if (source.contains("Netease")) return 40;
-        if (source.contains("Kugou KRC")) return 35;
-        if (source.contains("Migu MRC")) return 34;
-        if (source.contains("Kuwo")) return 30;
+        if (source.contains("Netease")) return 42;
+        if (source.contains("Kugou KRC")) return 38;
+        if (source.contains("Migu MRC")) return 36;
         if (source.contains("Kugou")) return 8;
         if (source.contains("Local")) return 30;
         return 0;
