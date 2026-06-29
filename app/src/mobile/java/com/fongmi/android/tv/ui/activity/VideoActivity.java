@@ -13,9 +13,12 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.text.style.ClickableSpan;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
@@ -1970,6 +1973,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         });
         mLyricsResultDialog = dialog;
         dialog.show();
+        placeLyricsDialogBelowPlayer(dialog, false, 0);
     }
 
     private void showLyricsResults(int seq, String cacheKey, List<LyricsResult> results, boolean complete) {
@@ -1988,6 +1992,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         for (int i = 0; i < results.size(); i++) labels[i] = getLyricsResultLabel(results.get(i));
         if (mLyricsResultDialog != null && mLyricsResultAdapter != null && mLyricsResultDialog.isShowing()) {
             updateLyricsResultAdapter(labels);
+            placeLyricsDialogBelowPlayer(mLyricsResultDialog, true, labels.length);
             return;
         }
         dismissLyricsResultDialog();
@@ -2007,6 +2012,40 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         });
         mLyricsResultDialog = dialog;
         dialog.show();
+        placeLyricsDialogBelowPlayer(dialog, true, results.size());
+    }
+
+    private void placeLyricsDialogBelowPlayer(AlertDialog dialog, boolean resultList, int itemCount) {
+        if (dialog == null || isFullscreen() || mBinding == null) return;
+        Window window = dialog.getWindow();
+        if (window == null) return;
+        int margin = ResUtil.dp2px(12);
+        int width = Math.max(1, Math.min(ResUtil.getScreenWidth(this) - margin * 2, ResUtil.dp2px(560)));
+        int height = resultList ? lyricsResultDialogHeight(itemCount, margin) : WindowManager.LayoutParams.WRAP_CONTENT;
+        window.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        WindowManager.LayoutParams attrs = window.getAttributes();
+        attrs.y = Math.max(mEpisodeBottomInset, margin);
+        attrs.dimAmount = 0f;
+        window.setAttributes(attrs);
+        window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        window.setLayout(width, height);
+    }
+
+    private int lyricsResultDialogHeight(int itemCount, int margin) {
+        int available = getBelowPlayerHeight(margin);
+        int estimated = ResUtil.dp2px(132) + Math.max(1, itemCount) * ResUtil.dp2px(56);
+        int minimum = Math.min(ResUtil.dp2px(120), available);
+        return Math.max(minimum, Math.min(available, estimated));
+    }
+
+    private int getBelowPlayerHeight(int margin) {
+        int[] root = new int[2];
+        int[] video = new int[2];
+        mBinding.getRoot().getLocationOnScreen(root);
+        mBinding.video.getLocationOnScreen(video);
+        int videoBottom = video[1] - root[1] + mBinding.video.getHeight();
+        int available = mBinding.getRoot().getHeight() - videoBottom - Math.max(mEpisodeBottomInset, 0) - margin * 2;
+        return Math.max(1, available);
     }
 
     private void updateLyricsResultAdapter(String[] labels) {

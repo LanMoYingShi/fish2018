@@ -7,7 +7,7 @@ import java.util.List;
 
 public class LyricsResult {
 
-    private static final int CACHE_VERSION = 13;
+    private static final int CACHE_VERSION = 14;
 
     private int cacheVersion;
     private String source;

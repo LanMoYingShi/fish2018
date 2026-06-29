@@ -259,3 +259,41 @@ HE-Music-Flutter 的歌词域模型适合移动端：
 - 网络源默认要有超时、User-Agent、缓存和开关。
 - 对 TV 端要避免过重绘制，逐字高亮应先在手机验证，再扩展到 TV。
 - 涉及第三方音乐源的播放地址解析风险较高，当前任务聚焦歌词，不把“解锁播放”作为默认功能。
+
+## 2026-06-30 深搜补充
+
+本轮重点继续搜索 Android、TTML、QRC/YRC/KRC、逐字歌词渲染、K歌评分相关开源实现。结论是：歌词源和解析仍有可补空间；伴奏、BPM、节拍器没有稳定公共 API；评分只能作为后续实验功能，不应进入当前默认链路。
+
+### 可直接借鉴的方向
+
+| 项目 | 价值 | 落地建议 |
+| --- | --- | --- |
+| `Zeehan2005/AMLL-DroidMate` | Android 端多源歌词、候选排序、AMLL WebView 渲染、features 探测 | 借鉴候选排序：缓存优先、置信度、逐字/翻译/罗马音特性、源偏好 |
+| `N-Zik-Group/Better-Lyrics` | Android/Kotlin TTML 解析，处理 `ttp:begin`、无行级 begin、`lyricOffset` | 不复制 GPL 代码，只吸收解析兼容思路；已在 `TtmlClient` 增强 |
+| `dokar3/amlv` | Apache-2.0，Compose 版 Apple Music-like lyrics view | 只作为歌词动效和行切换参考；当前项目是 Java View，不引入 Compose |
+| `better-lyrics/api` | Go 实现的 TTML API，接口有 `/getLyrics`、`/ttml/getLyrics`、`/kugou/getLyrics` | 实测未缓存查询需要 `X-API-Key`，不适合作默认无配置源 |
+| `xmcp/QRCD`、`apoint123/qrc-decoder` | QQMusic QRC 抓取/解码参考 | 仅用于校验现有 QQMusic QRC 解码逻辑，不直接复制 |
+| `TheX24/Spicy-Player` | Android 离线播放器，复刻 Spicy Lyrics 逐字视觉 | UI 动效参考，非歌词源参考 |
+| `AirLyrics/AirLyrics` | Android 悬浮歌词，多 App 同步 LRC | 可参考悬浮层/非全屏歌词显示边界，不影响播放器控制层 |
+
+### 本轮已吸收的最佳实践
+
+- 手机非全屏歌词搜索结果不再居中遮挡播放器，而是贴近底部、限制宽高、取消背景变暗；全屏和电视端不改。
+- 手动搜索结果是并发 progressive 更新，后续结果到达时需要重新约束弹窗高度，避免列表变长后盖住播放器。
+- TTML 解析兼容 `ttp:begin`/`ttp:end`、命名空间属性、缺失行级 `begin` 时取首个 span 时间、`lyricOffset`、`s/ms/m/h` 时间单位。
+- TTML 解析变更后需要提升歌词缓存版本，避免旧转换结果继续命中。
+
+### 暂不建议默认加入的内容
+
+- `better-lyrics/api`：文档写着 cached requests free，但真实未缓存请求会返回 `API key required`。除非后续用户提供 key 或我们做可选配置，否则不接入默认自动源。
+- 伴奏源：未发现稳定 API 能直接给出伴奏音轨。搜索命中多为本地 AI 人声分离、用户自备伴奏、播放地址解锁，不符合当前产品边界。
+- BPM/节拍器：未发现稳定音乐源 API。若依赖客户端音频分析或手动 BPM，不做。
+- 评分：`TarsosDSP`、PitchDetect、flutter-fft 等可做音高检测，但需要麦克风权限、延迟校准、降噪、音频输入设备兼容，适合后续实验开关，不适合当前默认功能。
+
+### 后续剩余阶段建议
+
+1. 完善候选结果体验：保留搜索结果弹窗，允许连续切换候选；显示来源、逐字/逐句、评分和缓存状态。
+2. 加强匹配质量：把 AMLL-DroidMate 的候选排序思想落到现有 `weightedScore`，增加“逐字特性数量”和“当前播放源偏好”。
+3. 增强本地歌词：支持更多旁挂命名，如 `歌曲ID.ttml`、`歌名.歌曲ID.lrc`，并允许用户保存当前网络歌词为本地旁挂。
+4. 逐字显示继续微调：行切换、时间偏移、快速演唱场景下优先保证当前行从头开始，不做预闪烁状态。
+5. 评分/伴奏/BPM 暂停：除非找到稳定 API 或用户明确接受实验性本地分析，否则不进入默认路线。
