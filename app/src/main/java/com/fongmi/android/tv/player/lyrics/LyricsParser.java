@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 public class LyricsParser {
 
     private static final Pattern TIME = Pattern.compile("\\[(\\d{1,3}):(\\d{2})(?:[.:](\\d{1,3}))?]");
+    private static final Pattern WORD_TIME = Pattern.compile("<\\d+,-?\\d+>");
 
     private static class Mark {
 
@@ -101,7 +102,7 @@ public class LyricsParser {
 
     private static void addLine(List<LyricsLine> lines, String raw, List<Mark> marks) {
         if (isPrefixTimed(raw, marks)) {
-            String lyric = raw.substring(marks.get(marks.size() - 1).end).trim();
+            String lyric = cleanLyric(raw.substring(marks.get(marks.size() - 1).end));
             if (lyric.isEmpty()) return;
             for (Mark mark : marks) lines.add(new LyricsLine(mark.time, lyric));
             return;
@@ -110,7 +111,7 @@ public class LyricsParser {
         for (int i = 0; i < marks.size(); i++) {
             Mark mark = marks.get(i);
             int next = i + 1 < marks.size() ? marks.get(i + 1).start : raw.length();
-            String lyric = raw.substring(mark.end, next).trim();
+            String lyric = cleanLyric(raw.substring(mark.end, next));
             pending.add(mark.time);
             if (lyric.isEmpty()) continue;
             for (long time : pending) lines.add(new LyricsLine(time, lyric));
@@ -125,6 +126,10 @@ public class LyricsParser {
             cursor = mark.end;
         }
         return true;
+    }
+
+    private static String cleanLyric(String text) {
+        return WORD_TIME.matcher(text == null ? "" : text).replaceAll("").trim();
     }
 
     private static List<LyricsLine> compact(List<LyricsLine> input) {

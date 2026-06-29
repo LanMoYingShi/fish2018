@@ -20,6 +20,7 @@ public class LyricsRepository {
 
     private static final String TAG = "lyrics";
     private final LrcLibClient client = new LrcLibClient();
+    private final KuwoClient kuwo = new KuwoClient();
     private final LyricsMatcher matcher = new LyricsMatcher();
 
     public void load(LyricsRequest request, Callback callback) {
@@ -45,6 +46,7 @@ public class LyricsRepository {
         }
         List<LrcLibClient.Entry> candidates = client.findCandidates(request);
         LyricsResult remote = matcher.best(request, candidates);
+        if (remote == null || !remote.isValid()) remote = kuwo.find(request);
         if (remote != null && remote.isValid()) writeCache(request, remote);
         if (SpiderDebug.isEnabled()) SpiderDebug.log(TAG, "match title=%s artist=%s candidates=%d result=%s score=%d", request.getTitle(), request.getArtist(), candidates.size(), remote == null ? "none" : remote.getSource(), remote == null ? 0 : remote.getScore());
         return remote;
