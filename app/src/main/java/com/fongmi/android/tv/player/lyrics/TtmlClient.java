@@ -51,7 +51,7 @@ public class TtmlClient {
         Entry best = best(request, search(request));
         if (best == null) return null;
         String ttml = ttml(best.id);
-        String text = ttmlToEnhancedLrc(ttml);
+        String text = toEnhancedLrc(ttml);
         if (!LyricsParser.hasTimedLine(text)) return null;
         return new LyricsResult("AMLL TTML", best.name, best.artist, best.album, text, best.durationSec * 1000L, true, best.score + 4);
     }
@@ -125,7 +125,7 @@ public class TtmlClient {
         return "";
     }
 
-    private String ttmlToEnhancedLrc(String ttml) {
+    public static String toEnhancedLrc(String ttml) {
         if (TextUtils.isEmpty(ttml)) return "";
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -151,7 +151,7 @@ public class TtmlClient {
         }
     }
 
-    private void appendWords(StringBuilder builder, Element parent, long lineStart) {
+    private static void appendWords(StringBuilder builder, Element parent, long lineStart) {
         NodeList children = parent.getChildNodes();
         for (int i = 0; i < children.getLength(); i++) {
             Node child = children.item(i);
@@ -179,19 +179,19 @@ public class TtmlClient {
         }
     }
 
-    private void setFeature(DocumentBuilderFactory factory, String name, boolean value) {
+    private static void setFeature(DocumentBuilderFactory factory, String name, boolean value) {
         try {
             factory.setFeature(name, value);
         } catch (Exception ignored) {
         }
     }
 
-    private boolean skipRole(Element element) {
+    private static boolean skipRole(Element element) {
         String role = first(element.getAttribute("ttm:role"), element.getAttribute("role"));
         return "x-translation".equals(role) || "x-roman".equals(role) || "x-bg".equals(role);
     }
 
-    private long parseTime(String raw) {
+    private static long parseTime(String raw) {
         String value = raw == null ? "" : raw.trim();
         if (value.isEmpty()) return -1;
         try {
@@ -279,15 +279,15 @@ public class TtmlClient {
                 .trim();
     }
 
-    private String first(String first, String second) {
+    private static String first(String first, String second) {
         return !TextUtils.isEmpty(first) ? first : second;
     }
 
-    private double parseDouble(String value) {
+    private static double parseDouble(String value) {
         return Double.parseDouble(value.trim());
     }
 
-    private String formatTime(long timeMs) {
+    private static String formatTime(long timeMs) {
         long minute = timeMs / 60000;
         long second = timeMs % 60000;
         return String.format(Locale.US, "[%02d:%02d.%03d]", minute, second / 1000, second % 1000);

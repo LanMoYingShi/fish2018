@@ -99,13 +99,23 @@ public class LyricsRepository {
         if (dot <= 0) return null;
         File parent = source.getParentFile();
         if (parent == null) return null;
-        File lrc = new File(parent, name.substring(0, dot) + ".lrc");
-        if (!Path.exists(lrc)) lrc = new File(parent, name.substring(0, dot) + ".LRC");
+        String base = name.substring(0, dot);
+        File ttml = findLocal(parent, base, ".ttml", ".TTML");
+        if (Path.exists(ttml)) {
+            String text = TtmlClient.toEnhancedLrc(Path.read(ttml));
+            if (!TextUtils.isEmpty(text) && LyricsParser.hasTimedLine(text)) return new LyricsResult("Local TTML", request.getTitle(), request.getArtist(), request.getAlbum(), text, request.getDurationMs(), true, 104);
+        }
+        File lrc = findLocal(parent, base, ".lrc", ".LRC");
         if (!Path.exists(lrc)) return null;
         String text = Path.read(lrc);
         if (TextUtils.isEmpty(text)) return null;
         boolean synced = LyricsParser.hasTimedLine(text);
         return new LyricsResult("Local", request.getTitle(), request.getArtist(), request.getAlbum(), text, request.getDurationMs(), synced, 100);
+    }
+
+    private File findLocal(File parent, String base, String lower, String upper) {
+        File file = new File(parent, base + lower);
+        return Path.exists(file) ? file : new File(parent, base + upper);
     }
 
     private File sourceFile(String url) {
