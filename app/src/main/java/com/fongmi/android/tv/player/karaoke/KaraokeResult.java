@@ -3,6 +3,7 @@ package com.fongmi.android.tv.player.karaoke;
 public class KaraokeResult {
 
     private final boolean scoring;
+    private final boolean pitchScoring;
     private final int scorePercent;
     private final int hitPercent;
     private final int voicedPercent;
@@ -14,8 +15,9 @@ public class KaraokeResult {
     private final String grade;
     private final String trackLabel;
 
-    private KaraokeResult(boolean scoring, int scorePercent, int hitPercent, int voicedPercent, long totalMs, int bestComboSeconds, int scoredLineCount, int averageLineScorePercent, int bestLineScorePercent, String trackLabel) {
+    private KaraokeResult(boolean scoring, boolean pitchScoring, int scorePercent, int hitPercent, int voicedPercent, long totalMs, int bestComboSeconds, int scoredLineCount, int averageLineScorePercent, int bestLineScorePercent, String trackLabel) {
         this.scoring = scoring;
+        this.pitchScoring = pitchScoring;
         this.scorePercent = scorePercent;
         this.hitPercent = hitPercent;
         this.voicedPercent = voicedPercent;
@@ -31,17 +33,23 @@ public class KaraokeResult {
     public static KaraokeResult from(KaraokeTrack track, KaraokeScoreSnapshot snapshot) {
         if (snapshot == null) return empty(track);
         boolean scoring = track != null && track.hasScoredNotes();
+        boolean pitchScoring = scoring && track.hasPitchRequiredNotes();
         int score = snapshot.getScorePercent();
         int hit = snapshot.getTotalWeightMs() <= 0 ? 0 : (int) Math.round(Math.max(0, Math.min(100, snapshot.getHitWeightMs() * 100.0 / snapshot.getTotalWeightMs())));
-        return new KaraokeResult(scoring, score, hit, snapshot.getVoicedPercent(), Math.round(snapshot.getTotalWeightMs()), snapshot.getBestComboSeconds(), snapshot.getScoredLineCount(), snapshot.getAverageLineScorePercent(), snapshot.getBestLineScorePercent(), label(track));
+        return new KaraokeResult(scoring, pitchScoring, score, hit, snapshot.getVoicedPercent(), Math.round(snapshot.getTotalWeightMs()), snapshot.getBestComboSeconds(), snapshot.getScoredLineCount(), snapshot.getAverageLineScorePercent(), snapshot.getBestLineScorePercent(), label(track));
     }
 
     public static KaraokeResult empty(KaraokeTrack track) {
-        return new KaraokeResult(track != null && track.hasScoredNotes(), 0, 0, 0, 0, 0, 0, 0, 0, label(track));
+        boolean scoring = track != null && track.hasScoredNotes();
+        return new KaraokeResult(scoring, scoring && track.hasPitchRequiredNotes(), 0, 0, 0, 0, 0, 0, 0, 0, label(track));
     }
 
     public boolean isScoring() {
         return scoring;
+    }
+
+    public boolean isPitchScoring() {
+        return pitchScoring;
     }
 
     public int getScorePercent() {

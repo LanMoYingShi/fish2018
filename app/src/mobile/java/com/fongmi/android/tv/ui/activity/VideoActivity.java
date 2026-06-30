@@ -1444,13 +1444,30 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         KaraokeResult result = mKaraoke.getResult();
         if (result == null) return false;
         mKaraokeResultShown = true;
-        new MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_WebHTV_LightDialog)
-                .setTitle(R.string.player_karaoke_result_title)
-                .setView(new KaraokeResultView(this).setResult(result))
-                .setPositiveButton(R.string.dialog_positive, (dialog, which) -> runAfterKaraokeResult(after))
-                .setOnCancelListener(dialog -> runAfterKaraokeResult(after))
-                .show();
+        KaraokeResultView view = new KaraokeResultView(this).setResult(result);
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_WebHTV_LightDialog).setView(view).create();
+        view.setAction(() -> {
+            dialog.dismiss();
+            runAfterKaraokeResult(after);
+        });
+        dialog.setOnCancelListener(d -> runAfterKaraokeResult(after));
+        configureKaraokeResultDialog(dialog, view);
+        dialog.show();
         return true;
+    }
+
+    private void configureKaraokeResultDialog(AlertDialog dialog, KaraokeResultView view) {
+        dialog.setOnShowListener(d -> {
+            Window window = dialog.getWindow();
+            if (window != null) {
+                window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+                WindowManager.LayoutParams params = window.getAttributes();
+                params.dimAmount = 0.62f;
+                window.setAttributes(params);
+                window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            }
+            view.requestActionFocus();
+        });
     }
 
     private void runAfterKaraokeResult(@Nullable Runnable after) {

@@ -839,10 +839,16 @@
     <string name="player_karaoke_track_none">目前沒有評分譜綁定</string>
     <string name="player_karaoke_result_title">K歌結果</string>
     <string name="player_karaoke_result_scoring">音準評分</string>
+    <string name="player_karaoke_result_rhythm">節奏評分</string>
     <string name="player_karaoke_result_free">自由唱</string>
     <string name="player_karaoke_result_track">評分譜：%1$s</string>
     <string name="player_karaoke_result_no_track">未綁定評分譜，目前是自由唱娛樂估算。</string>
+    <string name="player_karaoke_result_rhythm_note">根據歌詞時間軸自動生成，不判斷真實音高。</string>
+    <string name="player_karaoke_result_pitch_subtitle">按目標音高評分</string>
+    <string name="player_karaoke_result_rhythm_subtitle">歌詞時間軸自動生成</string>
+    <string name="player_karaoke_result_free_subtitle">自由唱娛樂估算</string>
     <string name="player_karaoke_result_metric_hit">命中率</string>
+    <string name="player_karaoke_result_metric_rhythm">節奏命中</string>
     <string name="player_karaoke_result_metric_participation">參與度</string>
     <string name="player_karaoke_result_score_value">%1$d 分 · %2$s</string>
     <string name="player_karaoke_result_progress">%1$s %2$d%%</string>

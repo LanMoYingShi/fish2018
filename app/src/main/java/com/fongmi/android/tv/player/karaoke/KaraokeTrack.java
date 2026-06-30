@@ -14,6 +14,7 @@ public class KaraokeTrack {
     private final List<KaraokeNote> notes;
     private final double weightedDurationMs;
     private final int scoredLineCount;
+    private final boolean pitchRequired;
 
     public KaraokeTrack(String title, String artist, double bpm, long gapMs, List<KaraokeNote> notes) {
         this.title = title == null ? "" : title.trim();
@@ -23,6 +24,7 @@ public class KaraokeTrack {
         this.notes = immutableSorted(notes);
         this.weightedDurationMs = calculateWeightedDurationMs(this.notes);
         this.scoredLineCount = calculateScoredLineCount(this.notes);
+        this.pitchRequired = calculatePitchRequired(this.notes);
     }
 
     public String getTitle() {
@@ -65,6 +67,10 @@ public class KaraokeTrack {
         return scoredLineCount;
     }
 
+    public boolean hasPitchRequiredNotes() {
+        return pitchRequired;
+    }
+
     public KaraokeNote findNote(long positionMs) {
         if (notes.isEmpty()) return null;
         int low = 0;
@@ -105,5 +111,10 @@ public class KaraokeTrack {
         int max = -1;
         for (KaraokeNote note : notes) if (note.isScored()) max = Math.max(max, note.getLineIndex());
         return max + 1;
+    }
+
+    private static boolean calculatePitchRequired(List<KaraokeNote> notes) {
+        for (KaraokeNote note : notes) if (note.isScored() && note.isPitchRequired()) return true;
+        return false;
     }
 }
