@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -229,20 +230,28 @@ public class KaraokeStatusView extends LinearLayout {
 
         private static final long WINDOW_BEFORE_MS = 2200;
         private static final long WINDOW_AFTER_MS = 4200;
+        private static final int HISTORY_COUNT = 72;
         private static final int PITCH_RANGE = 7;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path path = new Path();
         private final RectF rect = new RectF();
+        private final long[] historyTime = new long[HISTORY_COUNT];
+        private final float[] historyPitch = new float[HISTORY_COUNT];
         private KaraokeTrack track;
         private KaraokeScoreSnapshot snapshot;
+        private int historySize;
+        private long lastHistoryPosition = -1;
 
         private NoteTimelineView(Context context) {
             super(context);
         }
 
         private void setState(KaraokeTrack track, KaraokeScoreSnapshot snapshot) {
+            if (this.track != track) clearHistory();
             this.track = track;
             this.snapshot = snapshot;
+            appendHistory(snapshot);
             invalidate();
         }
 
@@ -260,6 +269,7 @@ public class KaraokeStatusView extends LinearLayout {
             int centerPitch = centerPitch(position, start, end);
             drawBackground(canvas, left, right, top, bottom);
             drawNotes(canvas, left, right, top, bottom, start, end, centerPitch);
+            drawHistory(canvas, left, right, top, bottom, start, end, centerPitch);
             drawCursor(canvas, left, right, top, bottom);
             drawSungMarker(canvas, left, right, top, bottom, centerPitch);
         }
@@ -288,6 +298,34 @@ public class KaraokeStatusView extends LinearLayout {
                 paint.setColor(noteColor(note));
                 canvas.drawRoundRect(rect, h / 2f, h / 2f, paint);
             }
+        }
+
+        private void drawHistory(Canvas canvas, float left, float right, float top, float bottom, long start, long end, int centerPitch) {
+            path.reset();
+            boolean started = false;
+            for (int i = 0; i < historySize; i++) {
+                long time = historyTime[i];
+                if (time < start || time > end) {
+                    started = false;
+                    continue;
+                }
+                float x = xOf(time, start, end, left, right);
+                float y = yOf(historyPitch[i], centerPitch, top, bottom);
+                if (!started) {
+                    path.moveTo(x, y);
+                    started = true;
+                } else {
+                    path.lineTo(x, y);
+                }
+            }
+            if (path.isEmpty()) return;
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(dp(1.6f));
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeJoin(Paint.Join.ROUND);
+            paint.setColor(0xDD2DD4BF);
+            canvas.drawPath(path, paint);
+            paint.setStyle(Paint.Style.FILL);
         }
 
         private void drawCursor(Canvas canvas, float left, float right, float top, float bottom) {
@@ -325,6 +363,36 @@ public class KaraokeStatusView extends LinearLayout {
             if (count > 0) return Math.round(sum / (float) count);
             KaraokeNote note = track.findScoredNote(position);
             return note == null ? 60 : note.getPitch();
+        }
+
+        private void appendHistory(KaraokeScoreSnapshot snapshot) {
+            if (snapshot == null) {
+                clearHistory();
+                return;
+            }
+            long position = snapshot.getPositionMs();
+            if (lastHistoryPosition >= 0 && Math.abs(position - lastHistoryPosition) > 2_000) clearHistory();
+            if (!snapshot.isVoiced() || Double.isNaN(snapshot.getSungMidi())) {
+                lastHistoryPosition = position;
+                return;
+            }
+            if (lastHistoryPosition >= 0 && Math.abs(position - lastHistoryPosition) < 70) return;
+            float pitch = (float) snapshot.getSungMidi();
+            if (snapshot.getTargetNote() != null && !Double.isNaN(snapshot.getDistanceSemitones())) pitch = (float) (snapshot.getTargetNote().getPitch() + snapshot.getDistanceSemitones());
+            if (historySize == HISTORY_COUNT) {
+                System.arraycopy(historyTime, 1, historyTime, 0, HISTORY_COUNT - 1);
+                System.arraycopy(historyPitch, 1, historyPitch, 0, HISTORY_COUNT - 1);
+                historySize--;
+            }
+            historyTime[historySize] = position;
+            historyPitch[historySize] = pitch;
+            historySize++;
+            lastHistoryPosition = position;
+        }
+
+        private void clearHistory() {
+            historySize = 0;
+            lastHistoryPosition = -1;
         }
 
         private float xOf(long timeMs, long start, long end, float left, float right) {
