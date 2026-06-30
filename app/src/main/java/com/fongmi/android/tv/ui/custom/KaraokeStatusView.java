@@ -52,6 +52,7 @@ public class KaraokeStatusView extends LinearLayout {
 
         title = textView(context, 13, true);
         detail = textView(context, 12, false);
+        detail.setMinHeight(dp(15));
         score = new ScoreProgressView(context);
         timeline = new NoteTimelineView(context);
         pitch = new PitchMeterView(context);
@@ -79,22 +80,26 @@ public class KaraokeStatusView extends LinearLayout {
             return;
         }
         setVisibility(VISIBLE);
-        title.setText(getTitle(status, snapshot));
+        title.setText(getTitle(status, track, snapshot));
         String text = getDetail(status, sample, snapshot, track);
-        detail.setText(text);
-        detail.setVisibility(text.isEmpty() ? GONE : VISIBLE);
+        detail.setText(text.isEmpty() ? " " : text);
+        detail.setVisibility(text.isEmpty() ? INVISIBLE : VISIBLE);
         score.setState(snapshot);
         score.setVisibility(showScore(status, snapshot) ? VISIBLE : GONE);
         timeline.setState(track, snapshot);
         timeline.setVisibility(showTimeline(status, track, snapshot) ? VISIBLE : GONE);
         pitch.setState(sample, snapshot);
-        pitch.setVisibility(showPitch(status, snapshot) ? VISIBLE : GONE);
+        pitch.setVisibility(showPitch(status, track) ? VISIBLE : GONE);
         volume.setLevel(getVolumeLevel(status, sample));
         volume.setVisibility(showVolume(status) ? VISIBLE : GONE);
     }
 
-    private String getTitle(KaraokeStatus status, KaraokeScoreSnapshot snapshot) {
+    private String getTitle(KaraokeStatus status, KaraokeTrack track, KaraokeScoreSnapshot snapshot) {
         if (status == KaraokeStatus.SCORING) {
+            if (track != null && !track.hasPitchRequiredNotes()) {
+                if (snapshot != null && snapshot.getTotalWeightMs() > 0) return getResources().getString(R.string.player_karaoke_status_rhythm_score_grade, snapshot.getScorePercent(), snapshot.getGrade());
+                return getResources().getString(R.string.player_karaoke_status_rhythm_score, 0);
+            }
             if (snapshot != null && snapshot.getTotalWeightMs() > 0) return getResources().getString(R.string.player_karaoke_status_score_grade, snapshot.getScorePercent(), snapshot.getGrade());
             return getResources().getString(R.string.player_karaoke_status_score, 0);
         }
@@ -110,6 +115,7 @@ public class KaraokeStatusView extends LinearLayout {
         int midi = KaraokePitch.frequencyToNearestMidi(sample.getFrequencyHz());
         String pitch = KaraokePitch.midiToName(midi);
         if (status == KaraokeStatus.SCORING && track != null && snapshot != null && snapshot.getTargetNote() != null) {
+            if (!track.hasPitchRequiredNotes()) return appendStats(getResources().getString(R.string.player_karaoke_rhythm_detail, snapshot.getScorePercent()), snapshot);
             String state = snapshot.isHit()
                     ? getResources().getString(R.string.player_karaoke_pitch_hit)
                     : getResources().getString(R.string.player_karaoke_pitch_miss, Math.abs(snapshot.getDistanceSemitones()));
@@ -135,8 +141,7 @@ public class KaraokeStatusView extends LinearLayout {
 
     private boolean showScore(KaraokeStatus status, KaraokeScoreSnapshot snapshot) {
         return (status == KaraokeStatus.FREE_SING || status == KaraokeStatus.SCORING)
-                && snapshot != null
-                && snapshot.getTotalWeightMs() > 0;
+                && snapshot != null;
     }
 
     private boolean showTimeline(KaraokeStatus status, KaraokeTrack track, KaraokeScoreSnapshot snapshot) {
@@ -146,11 +151,10 @@ public class KaraokeStatusView extends LinearLayout {
                 && snapshot != null;
     }
 
-    private boolean showPitch(KaraokeStatus status, KaraokeScoreSnapshot snapshot) {
+    private boolean showPitch(KaraokeStatus status, KaraokeTrack track) {
         return status == KaraokeStatus.SCORING
-                && snapshot != null
-                && snapshot.getTargetNote() != null
-                && snapshot.getTargetNote().isPitchRequired();
+                && track != null
+                && track.hasPitchRequiredNotes();
     }
 
     private float getVolumeLevel(KaraokeStatus status, KaraokePitchSample sample) {
@@ -287,12 +291,13 @@ public class KaraokeStatusView extends LinearLayout {
             long position = snapshot.getPositionMs();
             long start = Math.max(0, position - WINDOW_BEFORE_MS);
             long end = position + WINDOW_AFTER_MS;
+            boolean pitchTrack = track.hasPitchRequiredNotes();
             int centerPitch = centerPitch(position, start, end);
             drawBackground(canvas, left, right, top, bottom);
             drawNotes(canvas, left, right, top, bottom, start, end, centerPitch);
-            drawHistory(canvas, left, right, top, bottom, start, end, centerPitch);
+            if (pitchTrack) drawHistory(canvas, left, right, top, bottom, start, end, centerPitch);
             drawCursor(canvas, left, right, top, bottom);
-            drawSungMarker(canvas, left, right, top, bottom, centerPitch);
+            if (pitchTrack) drawSungMarker(canvas, left, right, top, bottom, centerPitch);
         }
 
         private void drawBackground(Canvas canvas, float left, float right, float top, float bottom) {
@@ -321,7 +326,7 @@ public class KaraokeStatusView extends LinearLayout {
         private void drawNote(Canvas canvas, KaraokeNote note, long position, float x1, float x2, float y) {
             boolean current = note == snapshot.getTargetNote();
             boolean golden = note.getType().getScoreWeight() > 1.0;
-            float h = note.isPitchRequired() ? dp(isWideLayout() ? 6 : 5) : dp(4);
+            float h = note.isPitchRequired() ? dp(isWideLayout() ? 6 : 5) : dp(isWideLayout() ? 8 : 7);
             float radius = h / 2f;
             if (golden) drawGoldenGlow(canvas, x1, x2, y, h);
             if (current) drawCurrentGlow(canvas, x1, x2, y, h);

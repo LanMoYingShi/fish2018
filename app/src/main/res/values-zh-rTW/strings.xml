@@ -802,6 +802,8 @@
     <string name="player_karaoke_status_free_score_grade">K歌 · 娛樂 %1$d 分 · %2$s</string>
     <string name="player_karaoke_status_score">K歌 · %1$d 分</string>
     <string name="player_karaoke_status_score_grade">K歌 · %1$d 分 · %2$s</string>
+    <string name="player_karaoke_status_rhythm_score">K歌 · 節奏 %1$d 分</string>
+    <string name="player_karaoke_status_rhythm_score_grade">K歌 · 節奏 %1$d 分 · %2$s</string>
     <string name="player_karaoke_waiting">等待麥克風</string>
     <string name="player_karaoke_need_permission">需要麥克風權限</string>
     <string name="player_karaoke_mic_unavailable">麥克風不可用</string>
@@ -812,6 +814,7 @@
     <string name="player_karaoke_pitch_hit">命中</string>
     <string name="player_karaoke_pitch_miss">偏差 %1$.1f 半音</string>
     <string name="player_karaoke_free_detail">音高 %1$s · 參與 %2$d%%</string>
+    <string name="player_karaoke_rhythm_detail">節奏命中 %1$d%%</string>
     <string name="player_karaoke_combo">連擊 %1$d 秒</string>
     <string name="player_karaoke_line_score">本句 %1$d 分</string>
     <string name="player_karaoke_track">評分譜</string>

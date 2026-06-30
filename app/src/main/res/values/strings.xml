@@ -820,6 +820,8 @@
     <string name="player_karaoke_status_free_score_grade">Karaoke · Fun %1$d · %2$s</string>
     <string name="player_karaoke_status_score">Karaoke · %1$d</string>
     <string name="player_karaoke_status_score_grade">Karaoke · %1$d · %2$s</string>
+    <string name="player_karaoke_status_rhythm_score">Karaoke · Rhythm %1$d</string>
+    <string name="player_karaoke_status_rhythm_score_grade">Karaoke · Rhythm %1$d · %2$s</string>
     <string name="player_karaoke_waiting">Waiting for mic</string>
     <string name="player_karaoke_need_permission">Microphone permission required</string>
     <string name="player_karaoke_mic_unavailable">Microphone unavailable</string>
@@ -830,6 +832,7 @@
     <string name="player_karaoke_pitch_hit">Hit</string>
     <string name="player_karaoke_pitch_miss">Off %1$.1f st</string>
     <string name="player_karaoke_free_detail">Pitch %1$s · Participation %2$d%%</string>
+    <string name="player_karaoke_rhythm_detail">Rhythm hit %1$d%%</string>
     <string name="player_karaoke_combo">Combo %1$d sec</string>
     <string name="player_karaoke_line_score">Line %1$d%%</string>
     <string name="player_karaoke_track">Scoring track</string>
