@@ -68,6 +68,7 @@ import com.fongmi.android.tv.player.karaoke.KaraokeController;
 import com.fongmi.android.tv.player.karaoke.KaraokeResult;
 import com.fongmi.android.tv.player.karaoke.KaraokeTrackRepository;
 import com.fongmi.android.tv.player.lyrics.LyricsController;
+import com.fongmi.android.tv.player.lyrics.LyricsLine;
 import com.fongmi.android.tv.player.lyrics.LyricsRequest;
 import com.fongmi.android.tv.player.lyrics.LyricsResult;
 import com.fongmi.android.tv.player.lut.LutPreset;
@@ -1304,13 +1305,15 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void generateKaraokePitchTrack() {
-        if (service() == null || mLyrics == null || !KaraokeTrackRepository.canGeneratePitch(player(), mLyrics.getLines())) {
+        List<LyricsLine> lines = mLyrics == null ? null : mLyrics.getLines();
+        KaraokeTrackRepository.MediaInput input = service() == null ? null : KaraokeTrackRepository.snapshot(player());
+        if (!KaraokeTrackRepository.canGeneratePitch(input, lines)) {
             Notify.show(R.string.player_karaoke_track_generate_no_lyrics);
             return;
         }
         Notify.show(R.string.player_karaoke_track_generating_pitch);
         Task.execute(() -> {
-            KaraokeTrackRepository.ImportResult result = KaraokeTrackRepository.importGeneratedPitch(player(), mLyrics.getLines());
+            KaraokeTrackRepository.ImportResult result = KaraokeTrackRepository.importGeneratedPitch(input, lines);
             App.post(() -> onKaraokePitchTrackGenerated(result));
         });
     }

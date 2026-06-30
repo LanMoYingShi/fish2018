@@ -90,6 +90,17 @@ public class KaraokeTrackRepository {
         return null;
     }
 
+    public static MediaInput snapshot(PlayerManager player) {
+        if (player == null || player.isEmpty()) return MediaInput.empty();
+        String key = player.getKey();
+        String url = player.getUrl();
+        long duration = Math.max(0, player.getDuration());
+        String title = getTitle(player);
+        String artist = getArtist(player);
+        Map<String, String> headers = player.getHeaders() == null ? new HashMap<>() : new HashMap<>(player.getHeaders());
+        return new MediaInput(key, url, title, artist, duration, headers);
+    }
+
     public static ImportResult importText(PlayerManager player, String name, String text) {
         if (player == null || player.isEmpty()) return ImportResult.fail("empty player");
         return importText(signatureOf(player), name, text);
@@ -108,10 +119,14 @@ public class KaraokeTrackRepository {
     }
 
     public static ImportResult importGeneratedPitch(PlayerManager player, List<LyricsLine> lines) {
-        if (player == null || player.isEmpty()) return ImportResult.fail("empty player");
+        return importGeneratedPitch(snapshot(player), lines);
+    }
+
+    public static ImportResult importGeneratedPitch(MediaInput input, List<LyricsLine> lines) {
+        if (input == null || input.isEmpty()) return ImportResult.fail("empty player");
         try {
-            String signature = signatureOf(player);
-            String text = KaraokePitchTrackGenerator.build(player, lines);
+            String signature = input.getSignature();
+            String text = KaraokePitchTrackGenerator.build(input, lines);
             deleteGeneratedBoundIfAny(signature);
             delete(generatedFile(signature));
             return importText(generatedPitchFile(signature), "Generated experimental pitch scoring track", text);
@@ -136,7 +151,11 @@ public class KaraokeTrackRepository {
     }
 
     public static boolean canGeneratePitch(PlayerManager player, List<LyricsLine> lines) {
-        return KaraokePitchTrackGenerator.canGenerate(player, lines);
+        return canGeneratePitch(snapshot(player), lines);
+    }
+
+    public static boolean canGeneratePitch(MediaInput input, List<LyricsLine> lines) {
+        return KaraokePitchTrackGenerator.canGenerate(input, lines);
     }
 
     public static ImportResult importFile(PlayerManager player, File file) {
@@ -613,6 +632,67 @@ public class KaraokeTrackRepository {
             Matcher github = GITHUB_BLOB.matcher(url);
             if (github.find()) return "https://raw.githubusercontent.com/" + github.group(1) + "/" + github.group(2) + "/" + github.group(3) + "/" + github.group(4);
             return url.replace("/-/blob/", "/-/raw/");
+        }
+    }
+
+    public static class MediaInput {
+
+        private final String key;
+        private final String url;
+        private final String title;
+        private final String artist;
+        private final long duration;
+        private final Map<String, String> headers;
+        private final String signature;
+
+        private MediaInput(String key, String url, String title, String artist, long duration, Map<String, String> headers) {
+            this.key = safe(key);
+            this.url = safe(url);
+            this.title = safe(title);
+            this.artist = safe(artist);
+            this.duration = Math.max(0, duration);
+            this.headers = headers == null ? new HashMap<>() : new HashMap<>(headers);
+            this.signature = signatureOf(this.key, this.url, this.duration);
+        }
+
+        private static MediaInput empty() {
+            return new MediaInput("", "", "", "", 0, null);
+        }
+
+        public boolean isEmpty() {
+            return TextUtils.isEmpty(url);
+        }
+
+        public String getKey() {
+            return key;
+        }
+
+        public String getUrl() {
+            return url;
+        }
+
+        public String getTitle() {
+            return title;
+        }
+
+        public String getKeyword() {
+            return !TextUtils.isEmpty(title) ? stripExtension(title) : stripExtension(key);
+        }
+
+        public String getArtist() {
+            return artist;
+        }
+
+        public long getDuration() {
+            return duration;
+        }
+
+        public Map<String, String> getHeaders() {
+            return new HashMap<>(headers);
+        }
+
+        public String getSignature() {
+            return signature;
         }
     }
 

@@ -8,7 +8,6 @@ import android.net.Uri;
 import android.text.TextUtils;
 
 import com.fongmi.android.tv.App;
-import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.player.lyrics.LyricsLine;
 import com.fongmi.android.tv.player.lyrics.LyricsWord;
 
@@ -41,17 +40,17 @@ public class KaraokePitchTrackGenerator {
     private KaraokePitchTrackGenerator() {
     }
 
-    public static boolean canGenerate(PlayerManager player, List<LyricsLine> lines) {
-        return player != null && !player.isEmpty() && KaraokeGeneratedTrackBuilder.canGenerate(lines);
+    public static boolean canGenerate(KaraokeTrackRepository.MediaInput input, List<LyricsLine> lines) {
+        return input != null && !input.isEmpty() && KaraokeGeneratedTrackBuilder.canGenerate(lines);
     }
 
-    public static String build(PlayerManager player, List<LyricsLine> lines) throws Exception {
-        if (!canGenerate(player, lines)) throw new IllegalStateException("no timed lyrics");
-        List<Segment> segments = segments(lines, durationOf(player));
+    public static String build(KaraokeTrackRepository.MediaInput input, List<LyricsLine> lines) throws Exception {
+        if (!canGenerate(input, lines)) throw new IllegalStateException("no timed lyrics");
+        List<Segment> segments = segments(lines, input.getDuration());
         if (segments.size() < 3) throw new IllegalStateException("not enough lyric timing");
-        List<PitchFrame> frames = decode(player);
+        List<PitchFrame> frames = decode(input);
         if (frames.isEmpty()) throw new IllegalStateException("no pitch frames");
-        return buildText(defaultKeyword(player), artist(player), segments, frames);
+        return buildText(input.getKeyword(), input.getArtist(), segments, frames);
     }
 
     private static String buildText(String title, String artist, List<Segment> segments, List<PitchFrame> frames) {
@@ -91,11 +90,11 @@ public class KaraokePitchTrackGenerator {
                 .append(lyric(lyric)).append('\n');
     }
 
-    private static List<PitchFrame> decode(PlayerManager player) throws Exception {
+    private static List<PitchFrame> decode(KaraokeTrackRepository.MediaInput input) throws Exception {
         MediaExtractor extractor = new MediaExtractor();
         MediaCodec decoder = null;
         try {
-            setDataSource(extractor, player.getUrl(), player.getHeaders());
+            setDataSource(extractor, input.getUrl(), input.getHeaders());
             int track = selectAudioTrack(extractor);
             if (track < 0) throw new IllegalStateException("no audio track");
             extractor.selectTrack(track);
@@ -283,20 +282,6 @@ public class KaraokePitchTrackGenerator {
             units.add(clean);
         }
         return units;
-    }
-
-    private static long durationOf(PlayerManager player) {
-        long duration = player == null ? 0 : player.getDuration();
-        return Math.max(0, duration);
-    }
-
-    private static String defaultKeyword(PlayerManager player) {
-        return KaraokeTrackRepository.defaultKeyword(player);
-    }
-
-    private static String artist(PlayerManager player) {
-        if (player == null || player.getMetadata() == null || player.getMetadata().artist == null) return "";
-        return player.getMetadata().artist.toString();
     }
 
     private static String tag(String value, String fallback) {
