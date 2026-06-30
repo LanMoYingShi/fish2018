@@ -4,7 +4,11 @@ import android.content.Context;
 import android.graphics.PixelFormat;
 import android.os.Build;
 import android.provider.Settings;
+import android.util.DisplayMetrics;
 import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.WindowManager;
 
 import com.fongmi.android.tv.App;
@@ -22,8 +26,15 @@ public class DesktopLyricsWindow {
 
     private LyricsController controller;
     private LyricsOverlayView view;
+    private WindowManager.LayoutParams params;
     private PlayerManager player;
+    private float downRawX;
+    private float downRawY;
+    private int downX;
+    private int downY;
+    private int touchSlop;
     private boolean attached;
+    private boolean dragging;
     private boolean foreground = true;
 
     public DesktopLyricsWindow(Context context) {
@@ -80,10 +91,16 @@ public class DesktopLyricsWindow {
 
     private void ensureAttached() {
         if (windowManager == null) return;
-        if (view == null) view = new LyricsOverlayView(context);
+        if (view == null) {
+            view = new LyricsOverlayView(context);
+            view.setDesktopMode(true);
+            view.setOnTouchListener(this::onTouch);
+            touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
+        }
         if (attached) return;
         try {
-            windowManager.addView(view, buildParams());
+            params = buildParams();
+            windowManager.addView(view, params);
             attached = true;
         } catch (Throwable ignored) {
             attached = false;
@@ -92,17 +109,90 @@ public class DesktopLyricsWindow {
 
     private WindowManager.LayoutParams buildParams() {
         WindowManager.LayoutParams params = new WindowManager.LayoutParams();
-        params.width = WindowManager.LayoutParams.MATCH_PARENT;
+        params.width = windowWidth();
         params.height = WindowManager.LayoutParams.WRAP_CONTENT;
-        params.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        params.y = dp(56);
+        params.gravity = Gravity.TOP | Gravity.START;
+        params.x = PlayerSetting.getDesktopLyricsX(defaultX(params.width));
+        params.y = PlayerSetting.getDesktopLyricsY(defaultY());
+        clamp(params);
         params.format = PixelFormat.TRANSLUCENT;
         params.type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE;
         params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                 | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                 | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
         return params;
+    }
+
+    private boolean onTouch(View view, MotionEvent event) {
+        if (params == null || windowManager == null) return false;
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN -> {
+                downRawX = event.getRawX();
+                downRawY = event.getRawY();
+                downX = params.x;
+                downY = params.y;
+                dragging = false;
+                return true;
+            }
+            case MotionEvent.ACTION_MOVE -> {
+                int dx = Math.round(event.getRawX() - downRawX);
+                int dy = Math.round(event.getRawY() - downRawY);
+                if (!dragging && Math.abs(dx) < touchSlop && Math.abs(dy) < touchSlop) return true;
+                dragging = true;
+                params.x = downX + dx;
+                params.y = downY + dy;
+                clamp(params);
+                updateLayout();
+                return true;
+            }
+            case MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (dragging) PlayerSetting.putDesktopLyricsPosition(params.x, params.y);
+                view.performClick();
+                dragging = false;
+                return true;
+            }
+            default -> {
+                return false;
+            }
+        }
+    }
+
+    private void updateLayout() {
+        try {
+            if (attached && view != null) windowManager.updateViewLayout(view, params);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void clamp(WindowManager.LayoutParams params) {
+        params.x = Math.min(Math.max(params.x, 0), Math.max(0, screenWidth() - params.width));
+        params.y = Math.min(Math.max(params.y, dp(24)), Math.max(dp(24), screenHeight() - dp(120)));
+    }
+
+    private int windowWidth() {
+        int width = screenWidth() - dp(32);
+        return Math.min(Math.max(width, dp(280)), dp(760));
+    }
+
+    private int defaultX(int width) {
+        return Math.max(0, (screenWidth() - width) / 2);
+    }
+
+    private int defaultY() {
+        return Math.max(dp(24), Math.round(screenHeight() * 0.68f));
+    }
+
+    private int screenWidth() {
+        return displayMetrics().widthPixels;
+    }
+
+    private int screenHeight() {
+        return displayMetrics().heightPixels;
+    }
+
+    private DisplayMetrics displayMetrics() {
+        return context.getResources().getDisplayMetrics();
     }
 
     private void onTick() {

@@ -254,6 +254,19 @@ public class PlayerSetting {
         Prefers.put("desktop_lyrics", value);
     }
 
+    public static int getDesktopLyricsX(int defaultValue) {
+        return Prefers.getInt("desktop_lyrics_x", defaultValue);
+    }
+
+    public static int getDesktopLyricsY(int defaultValue) {
+        return Prefers.getInt("desktop_lyrics_y", defaultValue);
+    }
+
+    public static void putDesktopLyricsPosition(int x, int y) {
+        Prefers.put("desktop_lyrics_x", x);
+        Prefers.put("desktop_lyrics_y", y);
+    }
+
     public static float getSubtitleTextSize() {
         return Prefers.getFloat("subtitle_text_size");
     }

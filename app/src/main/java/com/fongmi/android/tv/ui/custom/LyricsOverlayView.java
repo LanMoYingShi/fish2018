@@ -5,6 +5,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.SystemClock;
 import android.text.SpannableString;
 import android.text.Spanned;
@@ -41,6 +42,7 @@ public class LyricsOverlayView extends FrameLayout {
     private final Runnable wordRefresh = this::refreshWordProgress;
     private List<LyricsLine> lines = Collections.emptyList();
     private boolean compact;
+    private boolean desktopMode;
     private boolean playing;
     private int index = -1;
     private long basePositionMs;
@@ -68,6 +70,14 @@ public class LyricsOverlayView extends FrameLayout {
 
         LayoutParams params = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER);
         addView(box, params);
+        applyStyle();
+    }
+
+    public void setDesktopMode(boolean desktopMode) {
+        this.desktopMode = desktopMode;
+        setClickable(desktopMode);
+        box.setPadding(dp(desktopMode ? 16 : 18), dp(desktopMode ? 8 : 10), dp(desktopMode ? 16 : 18), dp(desktopMode ? 8 : 10));
+        box.setBackground(desktopMode ? desktopBackground() : null);
         applyStyle();
     }
 
@@ -103,6 +113,10 @@ public class LyricsOverlayView extends FrameLayout {
     }
 
     private void render(long positionMs) {
+        if (desktopMode) {
+            renderDesktop(positionMs);
+            return;
+        }
         int count = visibleRows();
         int center = count / 2;
         int offset = (ROWS - count) / 2;
@@ -122,6 +136,27 @@ public class LyricsOverlayView extends FrameLayout {
             row.setVisibility(VISIBLE);
             style(row, Math.abs(i - offset - center));
             setRowText(row, lines.get(lineIndex), lineIndex == index, positionMs);
+        }
+    }
+
+    private void renderDesktop(long positionMs) {
+        int count = visibleRows();
+        for (int i = 0; i < ROWS; i++) {
+            MaterialTextView row = rows[i];
+            if (i >= count) {
+                row.setText("");
+                row.setVisibility(GONE);
+                continue;
+            }
+            int lineIndex = index + i;
+            if (lineIndex < 0 || lineIndex >= lines.size()) {
+                row.setText("");
+                row.setVisibility(i == 0 ? INVISIBLE : GONE);
+                continue;
+            }
+            row.setVisibility(VISIBLE);
+            style(row, i);
+            setRowText(row, lines.get(lineIndex), i == 0, positionMs);
         }
     }
 
@@ -165,6 +200,14 @@ public class LyricsOverlayView extends FrameLayout {
     }
 
     private void applyStyle() {
+        if (desktopMode) {
+            for (int i = 0; i < ROWS; i++) {
+                MaterialTextView row = rows[i];
+                row.setVisibility(i < visibleRows() ? row.getVisibility() : GONE);
+                style(row, i);
+            }
+            return;
+        }
         int count = visibleRows();
         int offset = (ROWS - count) / 2;
         int center = count / 2;
@@ -177,15 +220,15 @@ public class LyricsOverlayView extends FrameLayout {
 
     private void style(MaterialTextView view, int distance) {
         boolean primary = distance == 0;
-        int size = compact ? primary ? 18 : 13 : primary ? 28 : distance == 1 ? 19 : 16;
+        int size = desktopMode ? primary ? 20 : 14 : compact ? primary ? 18 : 13 : primary ? 28 : distance == 1 ? 19 : 16;
         float scale = PlayerSetting.getLyricsTextSizeScale();
         int color = primary ? PRIMARY_COLOR : distance == 1 ? Color.WHITE : 0xB8FFFFFF;
         view.setTextSize(size * scale);
         view.setTextColor(color);
-        view.setAlpha(primary ? 1f : distance == 1 ? 0.82f : 0.58f);
+        view.setAlpha(primary ? 1f : desktopMode ? 0.72f : distance == 1 ? 0.82f : 0.58f);
         view.setTypeface(Typeface.DEFAULT, primary ? Typeface.BOLD : Typeface.NORMAL);
-        view.setMaxLines(primary ? 2 : 1);
-        view.setMinHeight(dp((compact ? primary ? 44 : 24 : primary ? 62 : 34) * scale));
+        view.setMaxLines(desktopMode ? 1 : primary ? 2 : 1);
+        view.setMinHeight(dp((desktopMode ? primary ? 32 : 24 : compact ? primary ? 44 : 24 : primary ? 62 : 34) * scale));
     }
 
     private void setRowText(MaterialTextView row, LyricsLine line, boolean primary, long positionMs) {
@@ -265,13 +308,23 @@ public class LyricsOverlayView extends FrameLayout {
     }
 
     private int primaryRow() {
+        if (desktopMode) return 0;
         int count = visibleRows();
         return (ROWS - count) / 2 + count / 2;
     }
 
     private int visibleRows() {
+        if (desktopMode) return 2;
         int rows = Math.min(PlayerSetting.getLyricsRows(), ROWS);
         return compact ? Math.min(rows, 3) : rows;
+    }
+
+    private GradientDrawable desktopBackground() {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(0xB320232A);
+        drawable.setCornerRadius(dp(14));
+        drawable.setStroke(dp(1), 0x26FFFFFF);
+        return drawable;
     }
 
     private int dp(float value) {
