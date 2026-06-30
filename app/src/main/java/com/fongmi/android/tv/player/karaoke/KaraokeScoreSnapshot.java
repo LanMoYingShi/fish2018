@@ -13,6 +13,12 @@ public class KaraokeScoreSnapshot {
     private final double distanceSemitones;
     private final boolean voiced;
     private final boolean hit;
+    private final int lineIndex;
+    private final int lineCount;
+    private final int scoredLineCount;
+    private final int currentLineScorePercent;
+    private final int bestLineScorePercent;
+    private final int averageLineScorePercent;
 
     public KaraokeScoreSnapshot(double totalWeightMs, double hitWeightMs, KaraokeNote targetNote, double sungMidi, double distanceSemitones, boolean voiced, boolean hit) {
         this(totalWeightMs, hitWeightMs, voiced ? totalWeightMs : 0, 0, 0, targetNote, sungMidi, distanceSemitones, voiced, hit);
@@ -23,6 +29,10 @@ public class KaraokeScoreSnapshot {
     }
 
     public KaraokeScoreSnapshot(long positionMs, double totalWeightMs, double hitWeightMs, double voicedWeightMs, double currentComboMs, double bestComboMs, KaraokeNote targetNote, double sungMidi, double distanceSemitones, boolean voiced, boolean hit) {
+        this(positionMs, totalWeightMs, hitWeightMs, voicedWeightMs, currentComboMs, bestComboMs, targetNote, sungMidi, distanceSemitones, voiced, hit, -1, 0, 0, 0, 0, 0);
+    }
+
+    public KaraokeScoreSnapshot(long positionMs, double totalWeightMs, double hitWeightMs, double voicedWeightMs, double currentComboMs, double bestComboMs, KaraokeNote targetNote, double sungMidi, double distanceSemitones, boolean voiced, boolean hit, int lineIndex, int lineCount, int scoredLineCount, int currentLineScorePercent, int bestLineScorePercent, int averageLineScorePercent) {
         this.positionMs = Math.max(0, positionMs);
         this.totalWeightMs = Math.max(0, totalWeightMs);
         this.hitWeightMs = Math.max(0, hitWeightMs);
@@ -34,6 +44,12 @@ public class KaraokeScoreSnapshot {
         this.distanceSemitones = distanceSemitones;
         this.voiced = voiced;
         this.hit = hit;
+        this.lineIndex = lineIndex;
+        this.lineCount = Math.max(0, lineCount);
+        this.scoredLineCount = Math.max(0, scoredLineCount);
+        this.currentLineScorePercent = clampPercent(currentLineScorePercent);
+        this.bestLineScorePercent = clampPercent(bestLineScorePercent);
+        this.averageLineScorePercent = clampPercent(averageLineScorePercent);
     }
 
     public long getPositionMs() {
@@ -89,6 +105,30 @@ public class KaraokeScoreSnapshot {
         return hit;
     }
 
+    public int getLineIndex() {
+        return lineIndex;
+    }
+
+    public int getLineCount() {
+        return lineCount;
+    }
+
+    public int getScoredLineCount() {
+        return scoredLineCount;
+    }
+
+    public int getCurrentLineScorePercent() {
+        return currentLineScorePercent;
+    }
+
+    public int getBestLineScorePercent() {
+        return bestLineScorePercent;
+    }
+
+    public int getAverageLineScorePercent() {
+        return averageLineScorePercent;
+    }
+
     public int getScorePercent() {
         if (totalWeightMs <= 0) return 0;
         return (int) Math.round(Math.max(0, Math.min(100, hitWeightMs * 100.0 / totalWeightMs)));
@@ -96,5 +136,9 @@ public class KaraokeScoreSnapshot {
 
     public String getGrade() {
         return KaraokeGrade.fromScore(getScorePercent());
+    }
+
+    private static int clampPercent(int value) {
+        return Math.max(0, Math.min(100, value));
     }
 }

@@ -23,6 +23,11 @@ public class KaraokeFreeSingScorer {
     private int lineIndex = -1;
     private long lineActiveMs;
     private long lineVoicedMs;
+    private long lineTotalWeightMs;
+    private double lineHitWeightMs;
+    private int completedLineCount;
+    private int completedLineScoreSum;
+    private int bestLineScorePercent;
     private double lastMidi = Double.NaN;
     private KaraokeScoreSnapshot snapshot;
 
@@ -42,7 +47,7 @@ public class KaraokeFreeSingScorer {
         long sliceMs = nextSlice(adjustedPositionMs);
         if (sliceMs > 0 && adjustedPositionMs >= warmupUntilMs && window.active) score(sliceMs, window, current);
         lastPositionMs = adjustedPositionMs;
-        snapshot = new KaraokeScoreSnapshot(adjustedPositionMs, totalWeightMs, hitWeightMs, voicedWeightMs, currentComboMs, bestComboMs, null, current.sungMidi, Double.NaN, current.voiced, current.voiced);
+        snapshot = new KaraokeScoreSnapshot(adjustedPositionMs, totalWeightMs, hitWeightMs, voicedWeightMs, currentComboMs, bestComboMs, null, current.sungMidi, Double.NaN, current.voiced, current.voiced, lineIndex, lineCount(), scoredLineCount(), currentLineScore(), bestLineScore(), averageLineScore());
         return snapshot;
     }
 
@@ -61,15 +66,23 @@ public class KaraokeFreeSingScorer {
         lineIndex = -1;
         lineActiveMs = 0;
         lineVoicedMs = 0;
+        lineTotalWeightMs = 0;
+        lineHitWeightMs = 0;
+        completedLineCount = 0;
+        completedLineScoreSum = 0;
+        bestLineScorePercent = 0;
         lastMidi = Double.NaN;
         snapshot = empty();
     }
 
     private void score(long sliceMs, Window window, Sample sample) {
         if (lineIndex != window.index) {
+            finishLine();
             lineIndex = window.index;
             lineActiveMs = 0;
             lineVoicedMs = 0;
+            lineTotalWeightMs = 0;
+            lineHitWeightMs = 0;
             lastMidi = Double.NaN;
         }
         lineActiveMs += sliceMs;
@@ -77,6 +90,8 @@ public class KaraokeFreeSingScorer {
         double score = freeScore(sample);
         totalWeightMs += sliceMs;
         hitWeightMs += sliceMs * score;
+        lineTotalWeightMs += sliceMs;
+        lineHitWeightMs += sliceMs * score;
         if (sample.voiced) {
             voicedWeightMs += sliceMs;
             currentComboMs += sliceMs;
@@ -125,6 +140,8 @@ public class KaraokeFreeSingScorer {
             lineIndex = -1;
             lineActiveMs = 0;
             lineVoicedMs = 0;
+            lineTotalWeightMs = 0;
+            lineHitWeightMs = 0;
             lastMidi = Double.NaN;
             currentComboMs = 0;
             return 0;
@@ -169,8 +186,44 @@ public class KaraokeFreeSingScorer {
         return new KaraokeScoreSnapshot(0, 0, null, Double.NaN, Double.NaN, false, false);
     }
 
+    private void finishLine() {
+        if (lineTotalWeightMs <= 0) return;
+        int score = currentLineScore();
+        completedLineCount++;
+        completedLineScoreSum += score;
+        bestLineScorePercent = Math.max(bestLineScorePercent, score);
+    }
+
+    private int lineCount() {
+        return scoredLineCount();
+    }
+
+    private int scoredLineCount() {
+        return completedLineCount + (lineTotalWeightMs > 0 ? 1 : 0);
+    }
+
+    private int currentLineScore() {
+        if (lineTotalWeightMs <= 0) return 0;
+        return percent(lineHitWeightMs, lineTotalWeightMs);
+    }
+
+    private int bestLineScore() {
+        return Math.max(bestLineScorePercent, currentLineScore());
+    }
+
+    private int averageLineScore() {
+        int count = scoredLineCount();
+        if (count <= 0) return 0;
+        return Math.round((completedLineScoreSum + (lineTotalWeightMs > 0 ? currentLineScore() : 0)) / (float) count);
+    }
+
     private static double clamp01(double value) {
         return Math.max(0, Math.min(1, value));
+    }
+
+    private static int percent(double hit, double total) {
+        if (total <= 0) return 0;
+        return (int) Math.round(Math.max(0, Math.min(100, hit * 100.0 / total)));
     }
 
     private static class Sample {

@@ -13,6 +13,7 @@ public class KaraokeTrack {
     private final long gapMs;
     private final List<KaraokeNote> notes;
     private final double weightedDurationMs;
+    private final int scoredLineCount;
 
     public KaraokeTrack(String title, String artist, double bpm, long gapMs, List<KaraokeNote> notes) {
         this.title = title == null ? "" : title.trim();
@@ -21,6 +22,7 @@ public class KaraokeTrack {
         this.gapMs = gapMs;
         this.notes = immutableSorted(notes);
         this.weightedDurationMs = calculateWeightedDurationMs(this.notes);
+        this.scoredLineCount = calculateScoredLineCount(this.notes);
     }
 
     public String getTitle() {
@@ -59,6 +61,10 @@ public class KaraokeTrack {
         return notes.isEmpty() ? 0 : notes.get(notes.size() - 1).getEndMs();
     }
 
+    public int getScoredLineCount() {
+        return scoredLineCount;
+    }
+
     public KaraokeNote findNote(long positionMs) {
         if (notes.isEmpty()) return null;
         int low = 0;
@@ -93,5 +99,11 @@ public class KaraokeTrack {
         double total = 0;
         for (KaraokeNote note : notes) total += note.getWeightedDurationMs();
         return total;
+    }
+
+    private static int calculateScoredLineCount(List<KaraokeNote> notes) {
+        int max = -1;
+        for (KaraokeNote note : notes) if (note.isScored()) max = Math.max(max, note.getLineIndex());
+        return max + 1;
     }
 }

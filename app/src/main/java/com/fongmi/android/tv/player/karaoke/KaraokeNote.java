@@ -9,8 +9,13 @@ public class KaraokeNote {
     private final int pitch;
     private final String text;
     private final KaraokeNoteType type;
+    private final int lineIndex;
 
     public KaraokeNote(long startMs, long endMs, int startBeat, int lengthBeat, int pitch, String text, KaraokeNoteType type) {
+        this(startMs, endMs, startBeat, lengthBeat, pitch, text, type, 0);
+    }
+
+    public KaraokeNote(long startMs, long endMs, int startBeat, int lengthBeat, int pitch, String text, KaraokeNoteType type, int lineIndex) {
         this.startMs = Math.max(0, startMs);
         this.endMs = Math.max(this.startMs, endMs);
         this.startBeat = startBeat;
@@ -18,6 +23,7 @@ public class KaraokeNote {
         this.pitch = pitch;
         this.text = text == null ? "" : text;
         this.type = type == null ? KaraokeNoteType.NORMAL : type;
+        this.lineIndex = Math.max(0, lineIndex);
     }
 
     public long getStartMs() {
@@ -50,6 +56,10 @@ public class KaraokeNote {
 
     public KaraokeNoteType getType() {
         return type;
+    }
+
+    public int getLineIndex() {
+        return lineIndex;
     }
 
     public boolean contains(long positionMs) {

@@ -40,6 +40,10 @@ public class UltraStarParser {
             parseTag(builder, line);
             return;
         }
+        if (line.charAt(0) == '-') {
+            builder.nextLine();
+            return;
+        }
         if (line.charAt(0) == 'E') return;
         if (!isNotePrefix(line.charAt(0))) return;
         parseNote(builder, line);
@@ -71,7 +75,7 @@ public class UltraStarParser {
         if (lengthBeat <= 0 || builder.bpm < MIN_BPM) return;
         long startMs = builder.beatToMs(startBeat);
         long endMs = builder.beatToMs(startBeat + lengthBeat);
-        builder.notes.add(new KaraokeNote(startMs, endMs, startBeat, lengthBeat, pitch, lyric, typeOf(prefix)));
+        builder.notes.add(new KaraokeNote(startMs, endMs, startBeat, lengthBeat, pitch, lyric, typeOf(prefix), builder.lineIndex));
     }
 
     private static boolean isNotePrefix(char prefix) {
@@ -110,6 +114,7 @@ public class UltraStarParser {
         private String artist;
         private double bpm;
         private long gapMs;
+        private int lineIndex;
         private final List<KaraokeNote> notes = new ArrayList<>();
 
         private long beatToMs(int beat) {
@@ -118,6 +123,10 @@ public class UltraStarParser {
 
         private KaraokeTrack build() {
             return new KaraokeTrack(title, artist, bpm, gapMs, notes);
+        }
+
+        private void nextLine() {
+            if (!notes.isEmpty()) lineIndex++;
         }
     }
 }

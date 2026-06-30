@@ -51,11 +51,13 @@ public class KaraokeGeneratedTrackBuilder {
             if (line == null || TextUtils.isEmpty(line.getText())) continue;
             long startMs = line.getTimeMs();
             long endMs = lineEnd(lines, i, durationMs);
+            int before = count;
             if (line.hasWords()) {
                 count = appendWordNotes(builder, line, startMs, endMs, count);
             } else {
                 count = appendLineNotes(builder, line.getText(), startMs, endMs, count);
             }
+            if (count > before) builder.append("-\n");
         }
         return count;
     }
