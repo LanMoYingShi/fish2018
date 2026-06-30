@@ -71,8 +71,9 @@ public class DesktopLyricsWindow {
         }
         ensureAttached();
         if (!attached || view == null) return;
-        if (controller == null) controller = new LyricsController(view);
-        if (refresh) controller.refresh(player, true);
+        boolean firstAttach = controller == null;
+        if (firstAttach) controller = new LyricsController(view);
+        if (refresh || firstAttach) controller.refresh(player, true);
         controller.update(player);
         schedule();
     }
@@ -205,7 +206,10 @@ public class DesktopLyricsWindow {
 
     private void hide() {
         App.removeCallbacks(tick);
-        if (controller != null) controller.clear();
+        if (controller != null) {
+            controller.release();
+            controller = null;
+        }
         if (!attached || windowManager == null || view == null) return;
         try {
             windowManager.removeView(view);
