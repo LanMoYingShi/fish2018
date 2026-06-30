@@ -21,11 +21,9 @@ import java.io.InputStreamReader;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -35,30 +33,21 @@ import java.util.regex.Pattern;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 public class KaraokeTrackRepository {
 
+    static final long MAX_REMOTE_BYTES = 512L * 1024L;
     private static final long MAX_SIDECAR_BYTES = 512L * 1024L;
     private static final long MAX_MIDI_BYTES = 2L * 1024L * 1024L;
-    private static final long MAX_REMOTE_BYTES = 512L * 1024L;
     private static final Pattern USDB_ID = Pattern.compile("(?i)(?:usdb\\.animux\\.de[\\s\\S]*?[?&]id=|\\busdb\\s*[:#]?\\s*|^)(\\d{3,6})(?:\\D|$)");
     private static final Pattern USDB_FIELD = Pattern.compile("(?is)<tr\\s+class=\"list_tr[12]\"\\s*>\\s*<td>\\s*%s\\s*</td>\\s*<td>(.*?)</td>");
     private static final Pattern USDB_NOTE = Pattern.compile("giveinfo0\\('([^']*)','(-?\\d+)','(-?\\d+)','(-?\\d+)','([^']*)','([^']*)'\\)");
-    private static final Pattern UES_ITEM = Pattern.compile("(?is)<li\\s+title=\"See all complete information of ([^\"]+)\"([\\s\\S]*?)(?=\\n\\s*<li\\s+title=\"See all complete information of |\\n\\s*</ul>)");
-    private static final Pattern UES_TXT = Pattern.compile("(?is)href=\"([^\"]*/canciones/descargar/txt/[^\"]+)\"");
-    private static final Pattern UES_ARTIST = Pattern.compile("(?is)<a\\s+href=\"/[^\"]*/canciones\\?artista=[^\"]*\"[^>]*>(.*?)</a>");
-    private static final Pattern UES_TITLE = Pattern.compile("(?is)<a>(.*?)</a>");
-    private static final Pattern RSS_ITEM = Pattern.compile("(?is)<item>(.*?)</item>");
-    private static final Pattern RSS_TITLE = Pattern.compile("(?is)<title>(.*?)</title>");
-    private static final Pattern RSS_GUID = Pattern.compile("(?is)<guid>(\\d+)</guid>");
     private static final Pattern GITHUB_BLOB = Pattern.compile("(?i)^https://github\\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)$");
-    private static final GithubScoreSource[] GITHUB_SCORE_SOURCES = new GithubScoreSource[]{
-            new GithubScoreSource("GitHub USDX", "razzertronic", "usdx-songs", "master", "Unlicense"),
-            new GithubScoreSource("GitHub UltraStar", "Vasil-Pahomov", "UltraStarSongs", "master", "GPL-3.0")
+    private static final KaraokeTrackProvider[] PROVIDERS = new KaraokeTrackProvider[]{
+            new KaraokeGithubTrackProvider(),
+            new KaraokeUltraStarEsProvider(),
+            new KaraokeUsdbProvider()
     };
-    private static final Map<String, List<GithubTreeEntry>> GITHUB_TREE_CACHE = new HashMap<>();
     private static final OkHttpClient CLIENT = OkHttp.client()
             .newBuilder()
             .connectTimeout(10, TimeUnit.SECONDS)
@@ -157,17 +146,11 @@ public class KaraokeTrackRepository {
         String query = TextUtils.isEmpty(keyword) ? defaultKeyword(player) : keyword.trim();
         Task.execute(() -> {
             List<SearchResult> results = new ArrayList<>();
-            try {
-                addUnique(results, searchGithubScoreSources(query));
-            } catch (Exception ignored) {
-            }
-            try {
-                addUnique(results, searchUltraStarEs(query));
-            } catch (Exception ignored) {
-            }
-            try {
-                addUnique(results, searchUsdb(query));
-            } catch (Exception ignored) {
+            for (KaraokeTrackProvider provider : PROVIDERS) {
+                try {
+                    addUnique(results, provider.search(query));
+                } catch (Exception ignored) {
+                }
             }
             if (callback != null) App.post(() -> callback.accept(results));
         });
@@ -209,7 +192,7 @@ public class KaraokeTrackRepository {
         return getRemoteText(remote.url, remote.cookie);
     }
 
-    private static String getRemoteText(String url, String cookie) throws Exception {
+    static String getRemoteText(String url, String cookie) throws Exception {
         if (!isHttpUrl(url)) throw new IllegalArgumentException("invalid url");
         Request.Builder builder = new Request.Builder().url(url.trim()).header("User-Agent", userAgent());
         String actualCookie = !TextUtils.isEmpty(cookie) ? cookie : webCookie(url);
@@ -227,109 +210,6 @@ public class KaraokeTrackRepository {
             if (!TextUtils.isEmpty(type) && !textual && !UltraStarParser.looksLikeUltraStar(text)) throw new IllegalStateException("not text");
             return text;
         }
-    }
-
-    private static List<SearchResult> searchUsdb(String keyword) throws Exception {
-        List<SearchResult> results = new ArrayList<>();
-        String id = parseUsdbId(keyword);
-        if (!TextUtils.isEmpty(id)) {
-            results.add(usdbResult(id));
-            return results;
-        }
-        if (TextUtils.isEmpty(keyword) || keyword.trim().length() < 2) return results;
-        results.addAll(searchUsdbRss(keyword, "https://usdb.animux.de/rss/rss_new_top10.php"));
-        results.addAll(searchUsdbRss(keyword, "https://usdb.animux.de/rss/rss_downloads_top10.php"));
-        return results;
-    }
-
-    private static SearchResult usdbResult(String id) throws Exception {
-        String detailUrl = "https://usdb.animux.de/?link=detail&id=" + id;
-        String html = getRemoteText(detailUrl, null);
-        String title = parseTitle(html);
-        String artist = parseArtist(title);
-        String song = parseSong(title);
-        String bpm = parseDetailField(html, "BPM");
-        String gap = parseDetailField(html, "GAP");
-        String note = "BPM " + emptyDash(bpm) + " · GAP " + emptyDash(gap);
-        return new SearchResult("USDB", song, artist, note, detailUrl, false);
-    }
-
-    private static List<SearchResult> searchUsdbRss(String keyword, String url) throws Exception {
-        List<SearchResult> results = new ArrayList<>();
-        String html = getRemoteText(url, null);
-        Matcher item = RSS_ITEM.matcher(html);
-        String normalized = normalizeSearch(keyword);
-        while (item.find() && results.size() < 5) {
-            String block = item.group(1);
-            String title = find(RSS_TITLE, block, 1);
-            String id = find(RSS_GUID, block, 1);
-            if (TextUtils.isEmpty(title) || TextUtils.isEmpty(id)) continue;
-            String clean = html(title);
-            if (!normalizeSearch(clean).contains(normalized)) continue;
-            results.add(new SearchResult("USDB RSS", parseSong(clean), parseArtist(clean), "USDB #" + id, "https://usdb.animux.de/?link=detail&id=" + id, false));
-        }
-        return results;
-    }
-
-    private static List<SearchResult> searchUltraStarEs(String keyword) throws Exception {
-        List<SearchResult> results = new ArrayList<>();
-        if (TextUtils.isEmpty(keyword) || keyword.trim().length() < 2) return results;
-        String url = "https://ultrastar-es.org/en/canciones?busqueda=" + encode(keyword.trim());
-        String html = getRemoteText(url, null);
-        Matcher matcher = UES_ITEM.matcher(html);
-        while (matcher.find() && results.size() < 12) {
-            String fallback = html(matcher.group(1));
-            String block = matcher.group(2);
-            String txt = absoluteUrl("https://ultrastar-es.org", find(UES_TXT, block, 1));
-            if (TextUtils.isEmpty(txt)) continue;
-            String artist = html(find(UES_ARTIST, block, 1));
-            String title = html(findLast(UES_TITLE, block, 1));
-            if (TextUtils.isEmpty(artist)) artist = parseArtist(fallback);
-            if (TextUtils.isEmpty(title)) title = parseSong(fallback);
-            results.add(new SearchResult("UltraStar-ES", title, artist, "可能需要登录下载", txt, true));
-        }
-        return results;
-    }
-
-    private static List<SearchResult> searchGithubScoreSources(String keyword) throws Exception {
-        List<SearchResult> results = new ArrayList<>();
-        if (TextUtils.isEmpty(keyword) || keyword.trim().length() < 2) return results;
-        for (GithubScoreSource source : GITHUB_SCORE_SOURCES) {
-            for (GithubTreeEntry entry : getGithubTree(source)) {
-                if (results.size() >= 24) return results;
-                if (!matchesKeyword(entry.path, keyword)) continue;
-                String label = labelFromPath(entry.path);
-                String note = "UltraStar .txt · " + source.license;
-                results.add(new SearchResult(source.name, parseSong(label), parseArtist(label), note, githubRawUrl(source, entry.path), false));
-            }
-        }
-        return results;
-    }
-
-    private static List<GithubTreeEntry> getGithubTree(GithubScoreSource source) throws Exception {
-        synchronized (GITHUB_TREE_CACHE) {
-            List<GithubTreeEntry> cached = GITHUB_TREE_CACHE.get(source.key());
-            if (cached != null) return cached;
-        }
-        String url = "https://api.github.com/repos/" + source.owner + "/" + source.repo + "/git/trees/" + source.branch + "?recursive=1";
-        String json = getRemoteText(url, null);
-        JSONArray tree = new JSONObject(json).optJSONArray("tree");
-        List<GithubTreeEntry> entries = new ArrayList<>();
-        if (tree != null) {
-            for (int i = 0; i < tree.length(); i++) {
-                JSONObject item = tree.optJSONObject(i);
-                if (item == null || !"blob".equals(item.optString("type"))) continue;
-                String path = item.optString("path");
-                int size = item.optInt("size", 0);
-                if (!path.toLowerCase(Locale.ROOT).endsWith(".txt")) continue;
-                if (size <= 0 || size > MAX_REMOTE_BYTES) continue;
-                entries.add(new GithubTreeEntry(path, size));
-            }
-        }
-        synchronized (GITHUB_TREE_CACHE) {
-            GITHUB_TREE_CACHE.put(source.key(), entries);
-        }
-        return entries;
     }
 
     private static String getUsdbTrackText(String id, String cookie) throws Exception {
@@ -364,30 +244,30 @@ public class KaraokeTrackRepository {
         return builder.toString();
     }
 
-    private static String parseUsdbId(String text) {
+    static String parseUsdbId(String text) {
         if (TextUtils.isEmpty(text)) return "";
         Matcher matcher = USDB_ID.matcher(text.trim());
         return matcher.find() ? matcher.group(1) : "";
     }
 
-    private static String parseDetailField(String html, String field) {
+    static String parseDetailField(String html, String field) {
         Matcher matcher = Pattern.compile(String.format(Locale.US, USDB_FIELD.pattern(), Pattern.quote(field))).matcher(html);
         return matcher.find() ? html(matcher.group(1)).trim() : "";
     }
 
-    private static String parseTitle(String html) {
+    static String parseTitle(String html) {
         String title = find(Pattern.compile("(?is)<title>\\s*USDB\\s*-\\s*(.*?)\\s*</title>"), html, 1);
         if (!TextUtils.isEmpty(title)) return html(title);
         return html(find(Pattern.compile("(?is)<th[^>]*>\\s*<span[^>]*>\\s*<b>(.*?)</b>"), html, 1));
     }
 
-    private static String parseArtist(String value) {
+    static String parseArtist(String value) {
         String text = value == null ? "" : value.trim();
         int index = text.indexOf(" - ");
         return index > 0 ? text.substring(0, index).trim() : "";
     }
 
-    private static String parseSong(String value) {
+    static String parseSong(String value) {
         String text = value == null ? "" : value.trim();
         int index = text.indexOf(" - ");
         return index > 0 && index + 3 < text.length() ? text.substring(index + 3).trim() : text;
@@ -485,34 +365,24 @@ public class KaraokeTrackRepository {
         }
     }
 
-    private static String encode(String text) throws Exception {
+    static String encode(String text) throws Exception {
         return URLEncoder.encode(text, "UTF-8");
     }
 
-    private static String encodePath(String path) throws Exception {
-        StringBuilder builder = new StringBuilder();
-        String[] parts = path.split("/");
-        for (int i = 0; i < parts.length; i++) {
-            if (i > 0) builder.append('/');
-            builder.append(URLEncoder.encode(parts[i], "UTF-8").replace("+", "%20"));
-        }
-        return builder.toString();
-    }
-
-    private static String absoluteUrl(String base, String path) {
+    static String absoluteUrl(String base, String path) {
         if (TextUtils.isEmpty(path)) return "";
         if (path.startsWith("http://") || path.startsWith("https://")) return path;
         if (path.startsWith("//")) return "https:" + path;
         return base + (path.startsWith("/") ? path : "/" + path);
     }
 
-    private static String find(Pattern pattern, String text, int group) {
+    static String find(Pattern pattern, String text, int group) {
         if (TextUtils.isEmpty(text)) return "";
         Matcher matcher = pattern.matcher(text);
         return matcher.find() ? matcher.group(group) : "";
     }
 
-    private static String findLast(Pattern pattern, String text, int group) {
+    static String findLast(Pattern pattern, String text, int group) {
         if (TextUtils.isEmpty(text)) return "";
         Matcher matcher = pattern.matcher(text);
         String value = "";
@@ -520,45 +390,13 @@ public class KaraokeTrackRepository {
         return value;
     }
 
-    private static String html(String text) {
+    static String html(String text) {
         if (TextUtils.isEmpty(text)) return "";
         return Html.fromHtml(text, Html.FROM_HTML_MODE_LEGACY).toString().replace('\u00A0', ' ').replace('\u3000', ' ').trim();
     }
 
-    private static String normalizeSearch(String value) {
+    static String normalizeSearch(String value) {
         return value == null ? "" : value.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]+", "");
-    }
-
-    private static boolean matchesKeyword(String path, String keyword) {
-        String normalizedPath = normalizeSearch(path);
-        String normalizedKeyword = normalizeSearch(keyword);
-        if (TextUtils.isEmpty(normalizedPath) || TextUtils.isEmpty(normalizedKeyword)) return false;
-        if (normalizedPath.contains(normalizedKeyword)) return true;
-        for (String token : keyword.trim().split("[^\\p{L}\\p{N}]+")) {
-            String normalizedToken = normalizeSearch(token);
-            if (normalizedToken.length() >= 2 && !normalizedPath.contains(normalizedToken)) return false;
-        }
-        return true;
-    }
-
-    private static String labelFromPath(String path) {
-        String value = stripExtension(path);
-        int slash = value.lastIndexOf('/');
-        String file = slash >= 0 ? value.substring(slash + 1) : value;
-        if (isGenericSongFile(file) && slash > 0) {
-            int parentSlash = value.lastIndexOf('/', slash - 1);
-            return value.substring(parentSlash + 1, slash);
-        }
-        return file.replaceAll("(?i)\\s*\\((?:minus|plus|duet|karaoke)\\)\\s*$", "").trim();
-    }
-
-    private static boolean isGenericSongFile(String value) {
-        String normalized = normalizeSearch(value);
-        return "s".equals(normalized) || "sm".equals(normalized) || "sp".equals(normalized) || "song".equals(normalized);
-    }
-
-    private static String githubRawUrl(GithubScoreSource source, String path) throws Exception {
-        return "https://raw.githubusercontent.com/" + source.owner + "/" + source.repo + "/" + source.branch + "/" + encodePath(path);
     }
 
     private static void addUnique(List<SearchResult> target, List<SearchResult> source) {
@@ -572,7 +410,7 @@ public class KaraokeTrackRepository {
         }
     }
 
-    private static String emptyDash(String value) {
+    static String emptyDash(String value) {
         return TextUtils.isEmpty(value) ? "-" : value;
     }
 
@@ -640,38 +478,6 @@ public class KaraokeTrackRepository {
         }
     }
 
-    private static class GithubScoreSource {
-
-        private final String name;
-        private final String owner;
-        private final String repo;
-        private final String branch;
-        private final String license;
-
-        private GithubScoreSource(String name, String owner, String repo, String branch, String license) {
-            this.name = name;
-            this.owner = owner;
-            this.repo = repo;
-            this.branch = branch;
-            this.license = license;
-        }
-
-        private String key() {
-            return owner + "/" + repo + "/" + branch;
-        }
-    }
-
-    private static class GithubTreeEntry {
-
-        private final String path;
-        private final int size;
-
-        private GithubTreeEntry(String path, int size) {
-            this.path = path;
-            this.size = size;
-        }
-    }
-
     public static class SearchResult {
 
         private final String source;
@@ -681,7 +487,7 @@ public class KaraokeTrackRepository {
         private final String url;
         private final boolean loginRequired;
 
-        private SearchResult(String source, String title, String artist, String note, String url, boolean loginRequired) {
+        SearchResult(String source, String title, String artist, String note, String url, boolean loginRequired) {
             this.source = source == null ? "" : source;
             this.title = title == null ? "" : title;
             this.artist = artist == null ? "" : artist;

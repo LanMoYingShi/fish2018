@@ -120,7 +120,8 @@
 3. 已实现 URL 导入，支持直接返回 UltraStar 文本的链接、GitHub/GitLab raw/blob 链接、USDB ID/详情页 view 重建。
 4. 已实现在线搜索的非 USDB 默认来源：GitHub 公开 UltraStar 谱库、UltraStar-ES 匿名搜索；USDB 放在后置候选，不作为当前优先实现方向。
 5. 已实现“轻量节奏评分谱”：从当前歌词时间轴生成 UltraStar RAP 类型评分窗口，用于无人工谱时的节奏/参与度评分，不做目标音高判断。
-6. 后续如果继续扩展爬虫谱源，应新增独立 `KaraokeTrackProvider`，需要登录时使用用户自备 Cookie，不进入默认静默链路；谱源仍不能混进 `LyricsRepository`。
+6. 已完成独立 `KaraokeTrackProvider` 抽象，当前 GitHub、UltraStar-ES、USDB 搜索都通过 Provider 调度；后续新增谱源不能混进 `LyricsRepository`。
+7. 后续如果继续扩展登录态爬虫谱源，应使用用户自备 Cookie，不进入默认静默链路。
 
 ### 歌词/音乐逆向 API 的实际价值
 
@@ -645,7 +646,7 @@ noteEndMs = noteStartMs + beatToMs(lengthBeat)
 - 已完成：UltraStar-ES 匿名搜索，下载仍取决于用户登录态或手动导入。
 - 已完成：USDB ID/详情页通过 `view.php` 重建，默认搜索优先级后置。
 - 已完成：从当前歌词时间轴生成轻量节奏评分谱，作为无人工谱时的可用补位方案。
-- 待完善：正式抽象 `KaraokeTrackProvider` 接口，把 GitHub/UltraStar-ES/USDB 从仓库类里拆出去，便于后续增减谱源。
+- 已完成：正式抽象 `KaraokeTrackProvider` 接口，把 GitHub/UltraStar-ES/USDB 搜索从仓库类里拆出去，便于后续增减谱源。
 
 验收：
 

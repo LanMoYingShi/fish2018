@@ -313,7 +313,7 @@ HE-Music-Flutter 的歌词域模型适合移动端：
 | USDB-fetcher / usdb_downloader | 代码路径主要处理用户已有 UltraStar `.txt` 后下载/整理音视频，不负责在线拿谱 | 不作为在线谱源，只作为“用户已有 `.txt` 后整理资源”的参考 |
 | USDX / Performous / Vocaluxe / ultrastar-score | 解析本地 UltraStar `.txt` 并评分，不提供在线谱源 | 继续参考评分模型，不作为谱源 Provider |
 
-结论：目前已接入多个可用评分谱入口：本地旁挂、UltraStar/MIDI 文件导入、URL 导入、GitHub 公开 UltraStar 谱库搜索、UltraStar-ES 匿名搜索、USDB ID/view 重建。USDB 登录搜索和更多爬虫谱源继续后置，应独立于 `LyricsRepository`，做成用户手动触发、可关闭、必要时用户自备 Cookie 的 `KaraokeTrackProvider`。
+结论：目前已接入多个可用评分谱入口：本地旁挂、UltraStar/MIDI 文件导入、URL 导入、GitHub 公开 UltraStar 谱库搜索、UltraStar-ES 匿名搜索、USDB ID/view 重建。搜索实现已经抽象为独立 `KaraokeTrackProvider`，不混入 `LyricsRepository`。USDB 登录搜索和更多爬虫谱源继续后置，后续应保持用户手动触发、可关闭、必要时用户自备 Cookie。
 
 ### 音符轨生成/提取项目补充核验
 
