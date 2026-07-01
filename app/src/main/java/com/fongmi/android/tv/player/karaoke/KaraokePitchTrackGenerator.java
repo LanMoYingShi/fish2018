@@ -48,10 +48,12 @@ public class KaraokePitchTrackGenerator {
     private static final int MAX_MIDI = 84;
     private static final int GAP_FILL_MAX_NOTES = 8;
     private static final int OUTLIER_STEP = 9;
+    private static final long TINY_RUN_MS = 220;
     private static final int MERGE_STRONG_DELTA = 1;
     private static final int MERGE_WEAK_DELTA = 2;
     private static final long MERGE_GAP_MS = 140;
     private static final long MERGE_MAX_MS = 2600;
+    private static final long RAP_MERGE_MAX_MS = 5200;
     private static final double KEY_CORRECTION_MAX_QUALITY = 0.68;
     private static final int MAX_PATH_CANDIDATES = 4;
     private static final double PATH_MISSING_PENALTY = 0.22;
@@ -122,6 +124,8 @@ public class KaraokePitchTrackGenerator {
         correctOctaves(notes);
         smoothOutliers(notes);
         smoothLineContour(notes);
+        notes = mergeNotes(notes);
+        notes = absorbTinyRuns(notes);
         notes = mergeNotes(notes);
         reporter.update(90, STAGE_WRITE);
         int count = 0;
@@ -295,29 +299,87 @@ public class KaraokePitchTrackGenerator {
 
     private static boolean canMerge(Note previous, Note next) {
         if (previous == null || next == null || previous.segment.lineEnd) return false;
-        if (previous.pitch < 0 || next.pitch < 0) return false;
         if (next.segment.startMs - previous.segment.endMs > MERGE_GAP_MS) return false;
         long duration = next.segment.endMs - previous.segment.startMs;
+        long previousDuration = previous.segment.endMs - previous.segment.startMs;
+        long nextDuration = next.segment.endMs - next.segment.startMs;
+        if (previous.pitch < 0 && next.pitch < 0) return duration <= RAP_MERGE_MAX_MS;
+        if (previous.pitch < 0 || next.pitch < 0) return duration <= MERGE_MAX_MS && Math.min(previousDuration, nextDuration) <= TINY_RUN_MS;
         if (duration > MERGE_MAX_MS) return false;
         int delta = Math.abs(normalizeOctave(next.pitch, previous.pitch) - previous.pitch);
         if (delta <= MERGE_STRONG_DELTA) return true;
-        long previousDuration = previous.segment.endMs - previous.segment.startMs;
-        long nextDuration = next.segment.endMs - next.segment.startMs;
         return delta <= MERGE_WEAK_DELTA
                 && (previous.estimated || next.estimated || previous.quality < 0.55 || next.quality < 0.55 || Math.min(previousDuration, nextDuration) < MIN_STABLE_NOTE_MS);
     }
 
     private static Note merge(Note previous, Note next) {
-        int nextPitch = normalizeOctave(next.pitch, previous.pitch);
         long previousDuration = Math.max(1, previous.segment.endMs - previous.segment.startMs);
         long nextDuration = Math.max(1, next.segment.endMs - next.segment.startMs);
-        int pitch = clampMidi(Math.round((previous.pitch * previousDuration + nextPitch * nextDuration) / (float) (previousDuration + nextDuration)));
+        int pitch;
+        int nextPitch = next.pitch;
+        if (previous.pitch < 0 && next.pitch < 0) {
+            pitch = -1;
+        } else if (previous.pitch < 0) {
+            pitch = next.pitch;
+        } else if (next.pitch < 0) {
+            pitch = previous.pitch;
+        } else {
+            nextPitch = normalizeOctave(next.pitch, previous.pitch);
+            pitch = clampMidi(Math.round((previous.pitch * previousDuration + nextPitch * nextDuration) / (float) (previousDuration + nextDuration)));
+        }
         Segment segment = new Segment(previous.segment.startMs, next.segment.endMs, previous.segment.text + next.segment.text);
         segment.lineEnd = next.segment.lineEnd;
         boolean estimated = previous.estimated || next.estimated || previous.pitch != pitch || nextPitch != pitch;
         boolean observed = previous.observed || next.observed;
         double quality = Math.max(previous.quality, next.quality);
         return new Note(segment, pitch, observed, quality, estimated);
+    }
+
+    private static List<Note> absorbTinyRuns(List<Note> notes) {
+        List<Note> result = new ArrayList<>(notes);
+        int index = 0;
+        while (index < result.size()) {
+            Note note = result.get(index);
+            if (note.segment.endMs - note.segment.startMs >= TINY_RUN_MS) {
+                index++;
+                continue;
+            }
+            int previousIndex = index > 0 && !result.get(index - 1).segment.lineEnd ? index - 1 : -1;
+            int nextIndex = index + 1 < result.size() && !note.segment.lineEnd ? index + 1 : -1;
+            if (previousIndex < 0 && nextIndex < 0) {
+                index++;
+                continue;
+            }
+            boolean mergePrevious = shouldAbsorbToPrevious(result, previousIndex, nextIndex, note);
+            if (mergePrevious) {
+                result.set(previousIndex, merge(result.get(previousIndex), note));
+                result.remove(index);
+                index = Math.max(0, previousIndex - 1);
+            } else {
+                result.set(index, merge(note, result.get(nextIndex)));
+                result.remove(nextIndex);
+            }
+        }
+        return result;
+    }
+
+    private static boolean shouldAbsorbToPrevious(List<Note> notes, int previousIndex, int nextIndex, Note note) {
+        if (previousIndex < 0) return false;
+        if (nextIndex < 0) return true;
+        Note previous = notes.get(previousIndex);
+        Note next = notes.get(nextIndex);
+        int previousCost = mergeCost(previous, note);
+        int nextCost = mergeCost(note, next);
+        if (previousCost != nextCost) return previousCost < nextCost;
+        long previousDuration = previous.segment.endMs - previous.segment.startMs;
+        long nextDuration = next.segment.endMs - next.segment.startMs;
+        return previousDuration >= nextDuration;
+    }
+
+    private static int mergeCost(Note left, Note right) {
+        if (left.pitch < 0 && right.pitch < 0) return 0;
+        if (left.pitch < 0 || right.pitch < 0) return 2;
+        return Math.abs(normalizeOctave(right.pitch, left.pitch) - left.pitch);
     }
 
     private static void applyPseudoKey(List<Note> notes) {

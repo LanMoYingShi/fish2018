@@ -1300,11 +1300,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void onKaraokeTrackGenerated(KaraokeTrackRepository.ImportResult result) {
         if (result != null && result.isSuccess()) {
             Notify.show(R.string.player_karaoke_track_generated);
-            if (!PlayerSetting.isKaraokeMode()) {
-                PlayerSetting.putKaraokeMode(true);
-                mBinding.control.action.karaoke.setSelected(true);
-            }
-            refreshLyrics();
+            applyKaraokeTrackChange(true);
         } else {
             String error = result == null ? "" : result.getError();
             Notify.show(getString(R.string.player_karaoke_track_generate_failed) + (TextUtils.isEmpty(error) ? "" : "\n" + error));
@@ -1328,11 +1324,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void onKaraokePitchTrackGenerated(KaraokeTrackRepository.ImportResult result) {
         dismissKaraokePitchProgress();
         if (result != null && result.isSuccess()) {
-            if (!PlayerSetting.isKaraokeMode()) {
-                PlayerSetting.putKaraokeMode(true);
-                mBinding.control.action.karaoke.setSelected(true);
-            }
-            refreshLyrics();
+            applyKaraokeTrackChange(true);
             showKaraokePitchResult(R.string.player_karaoke_track_generated_pitch, getString(R.string.player_karaoke_track_generated_pitch_message));
         } else {
             String error = result == null ? "" : result.getError();
@@ -1438,11 +1430,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void onKaraokeTrackImported(KaraokeTrackRepository.ImportResult result) {
         if (result != null && result.isSuccess()) {
             Notify.show(R.string.player_karaoke_track_imported);
-            if (!PlayerSetting.isKaraokeMode()) {
-                PlayerSetting.putKaraokeMode(true);
-                mBinding.control.action.karaoke.setSelected(true);
-            }
-            refreshLyrics();
+            applyKaraokeTrackChange(true);
         } else {
             String error = result == null ? "" : result.getError();
             Notify.show(getString(R.string.player_karaoke_track_import_failed) + (TextUtils.isEmpty(error) ? "" : "\n" + error));
@@ -1453,7 +1441,22 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         if (service() == null) return;
         boolean cleared = KaraokeTrackRepository.clearBinding(player());
         Notify.show(cleared ? R.string.player_karaoke_track_cleared : R.string.player_karaoke_track_none);
+        applyKaraokeTrackChange(false);
+    }
+
+    private void applyKaraokeTrackChange(boolean enableMode) {
+        if (enableMode && !PlayerSetting.isKaraokeMode()) {
+            PlayerSetting.putKaraokeMode(true);
+            mBinding.control.action.karaoke.setSelected(true);
+        }
         refreshLyrics();
+        reloadKaraokeTrack();
+    }
+
+    private void reloadKaraokeTrack() {
+        if (mKaraoke == null || service() == null) return;
+        setAudioOnly(LyricsController.isAudioOnly(player()));
+        mKaraoke.reload(this, player(), isAudioOnly() || isMusicLike());
     }
 
     private boolean showKaraokeResultIfNeeded() {
