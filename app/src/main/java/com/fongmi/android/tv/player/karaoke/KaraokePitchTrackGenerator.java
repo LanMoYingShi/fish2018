@@ -115,6 +115,8 @@ public class KaraokePitchTrackGenerator {
         applyPseudoKey(notes);
         correctOctaves(notes);
         smoothOutliers(notes);
+        smoothLineContour(notes);
+        notes = mergeNotes(notes);
         reporter.update(90, STAGE_WRITE);
         int count = 0;
         int observed = 0;
@@ -176,7 +178,8 @@ public class KaraokePitchTrackGenerator {
             Note note = notes.get(i);
             if (note.pitch < 0) continue;
             int normalized = normalizeOctave(note.pitch, median);
-            if ((Math.abs(normalized - median) <= 1 || mostlyFlat) && (note.quality < 0.55 || note.estimated)) {
+            boolean microJitter = mostlyFlat && Math.abs(normalized - median) <= 1;
+            if (microJitter || ((Math.abs(normalized - median) <= 1 || mostlyFlat) && (note.quality < 0.55 || note.estimated))) {
                 note.pitch = median;
                 note.estimated = true;
             } else {

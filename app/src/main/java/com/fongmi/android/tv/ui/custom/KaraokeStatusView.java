@@ -184,7 +184,8 @@ public class KaraokeStatusView extends LinearLayout {
         private static final long WINDOW_BEFORE_MS = 2200;
         private static final long WINDOW_AFTER_MS = 4200;
         private static final int HISTORY_COUNT = 72;
-        private static final int PITCH_RANGE = 7;
+        private static final float MIN_PITCH_SPAN = 14f;
+        private static final float PITCH_PADDING = 2f;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -193,8 +194,10 @@ public class KaraokeStatusView extends LinearLayout {
         private final float[] historyPitch = new float[HISTORY_COUNT];
         private KaraokeTrack track;
         private KaraokeScoreSnapshot snapshot;
+        private PitchScale pitchScale = defaultPitchScale();
         private int historySize;
         private long lastHistoryPosition = -1;
+        private float lastHistoryPitch = Float.NaN;
         private long smoothBasePosition = -1;
         private long smoothBaseRealtime;
 
@@ -203,7 +206,10 @@ public class KaraokeStatusView extends LinearLayout {
         }
 
         private void setState(KaraokeTrack track, KaraokeScoreSnapshot snapshot) {
-            if (this.track != track) clearHistory();
+            if (this.track != track) {
+                clearHistory();
+                pitchScale = pitchScaleFrom(track);
+            }
             this.track = track;
             this.snapshot = snapshot;
             updateSmoothBase(snapshot);
@@ -223,12 +229,11 @@ public class KaraokeStatusView extends LinearLayout {
             long start = Math.max(0, position - WINDOW_BEFORE_MS);
             long end = position + WINDOW_AFTER_MS;
             boolean pitchTrack = track.hasPitchRequiredNotes();
-            int centerPitch = centerPitch(position, start, end);
             drawBackground(canvas, left, right, top, bottom);
-            drawNotes(canvas, left, right, top, bottom, start, end, centerPitch);
-            if (pitchTrack) drawHistory(canvas, left, right, top, bottom, start, end, centerPitch);
+            drawNotes(canvas, left, right, top, bottom, start, end);
+            if (pitchTrack) drawHistory(canvas, left, right, top, bottom, start, end);
             drawCursor(canvas, left, right, top, bottom);
-            if (pitchTrack) drawSungMarker(canvas, left, right, top, bottom, centerPitch);
+            if (pitchTrack) drawSungMarker(canvas, left, right, top, bottom);
             postInvalidateOnAnimation();
         }
 
@@ -243,14 +248,14 @@ public class KaraokeStatusView extends LinearLayout {
             canvas.drawRoundRect(rect, dp(4), dp(4), paint);
         }
 
-        private void drawNotes(Canvas canvas, float left, float right, float top, float bottom, long start, long end, int centerPitch) {
+        private void drawNotes(Canvas canvas, float left, float right, float top, float bottom, long start, long end) {
             List<KaraokeNote> notes = track.getNotes();
             long position = drawPosition();
             for (KaraokeNote note : notes) {
                 if (!note.isScored() || note.getEndMs() < start || note.getStartMs() > end) continue;
                 float x1 = xOf(note.getStartMs(), start, end, left, right);
                 float x2 = xOf(note.getEndMs(), start, end, left, right);
-                float y = yOf(note.isPitchRequired() ? note.getPitch() : centerPitch, centerPitch, top, bottom);
+                float y = yOf(note.isPitchRequired() ? note.getPitch() : pitchScale.center(), top, bottom);
                 drawNote(canvas, note, position, Math.max(left, x1), Math.min(right, Math.max(x2, x1 + dp(2))), y);
             }
         }
@@ -299,7 +304,7 @@ public class KaraokeStatusView extends LinearLayout {
             paint.setStyle(Paint.Style.FILL);
         }
 
-        private void drawHistory(Canvas canvas, float left, float right, float top, float bottom, long start, long end, int centerPitch) {
+        private void drawHistory(Canvas canvas, float left, float right, float top, float bottom, long start, long end) {
             path.reset();
             boolean started = false;
             for (int i = 0; i < historySize; i++) {
@@ -309,7 +314,7 @@ public class KaraokeStatusView extends LinearLayout {
                     continue;
                 }
                 float x = xOf(time, start, end, left, right);
-                float y = yOf(historyPitch[i], centerPitch, top, bottom);
+                float y = yOf(historyPitch[i], top, bottom);
                 if (!started) {
                     path.moveTo(x, y);
                     started = true;
@@ -334,12 +339,12 @@ public class KaraokeStatusView extends LinearLayout {
             canvas.drawRect(x - dp(0.7f), top, x + dp(0.7f), bottom, paint);
         }
 
-        private void drawSungMarker(Canvas canvas, float left, float right, float top, float bottom, int centerPitch) {
+        private void drawSungMarker(Canvas canvas, float left, float right, float top, float bottom) {
             if (!snapshot.isVoiced() || Double.isNaN(snapshot.getSungMidi())) return;
             double midi = snapshot.getSungMidi();
             if (snapshot.getTargetNote() != null && !Double.isNaN(snapshot.getDistanceSemitones())) midi = snapshot.getTargetNote().getPitch() + snapshot.getDistanceSemitones();
             float x = left + (right - left) * WINDOW_BEFORE_MS / (float) (WINDOW_BEFORE_MS + WINDOW_AFTER_MS);
-            float y = yOf((float) midi, centerPitch, top, bottom);
+            float y = yOf((float) midi, top, bottom);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(snapshot.isHit() ? 0xFF34D399 : 0xFFFBBF24);
             canvas.drawCircle(x, y, dp(3.6f), paint);
@@ -347,44 +352,6 @@ public class KaraokeStatusView extends LinearLayout {
             paint.setStrokeWidth(dp(1));
             paint.setColor(0xD9000000);
             canvas.drawCircle(x, y, dp(3.6f), paint);
-        }
-
-        private int centerPitch(long position, long start, long end) {
-            KaraokeNote current = snapshot.getTargetNote();
-            if (current != null) {
-                int lineCenter = lineCenterPitch(current.getLineIndex());
-                if (lineCenter >= 0) return lineCenter;
-            }
-            KaraokeNote note = track.findScoredNote(position);
-            if (note != null) {
-                int lineCenter = lineCenterPitch(note.getLineIndex());
-                if (lineCenter >= 0) return lineCenter;
-            }
-            int visibleCenter = visibleCenterPitch(start, end);
-            if (visibleCenter >= 0) return visibleCenter;
-            return note == null ? 60 : note.getPitch();
-        }
-
-        private int lineCenterPitch(int lineIndex) {
-            int count = 0;
-            int sum = 0;
-            for (KaraokeNote note : track.getNotes()) {
-                if (!note.isScored() || !note.isPitchRequired() || note.getLineIndex() != lineIndex) continue;
-                sum += note.getPitch();
-                count++;
-            }
-            return count > 0 ? Math.round(sum / (float) count) : -1;
-        }
-
-        private int visibleCenterPitch(long start, long end) {
-            int count = 0;
-            int sum = 0;
-            for (KaraokeNote note : track.getNotes()) {
-                if (!note.isScored() || !note.isPitchRequired() || note.getEndMs() < start || note.getStartMs() > end) continue;
-                sum += note.getPitch();
-                count++;
-            }
-            return count > 0 ? Math.round(sum / (float) count) : -1;
         }
 
         private void appendHistory(KaraokeScoreSnapshot snapshot) {
@@ -407,14 +374,24 @@ public class KaraokeStatusView extends LinearLayout {
                 historySize--;
             }
             historyTime[historySize] = position;
-            historyPitch[historySize] = pitch;
+            historyPitch[historySize] = smoothHistoryPitch(pitch);
             historySize++;
             lastHistoryPosition = position;
+        }
+
+        private float smoothHistoryPitch(float pitch) {
+            if (Float.isNaN(lastHistoryPitch) || Math.abs(pitch - lastHistoryPitch) > 5f) {
+                lastHistoryPitch = pitch;
+            } else {
+                lastHistoryPitch = lastHistoryPitch * 0.72f + pitch * 0.28f;
+            }
+            return lastHistoryPitch;
         }
 
         private void clearHistory() {
             historySize = 0;
             lastHistoryPosition = -1;
+            lastHistoryPitch = Float.NaN;
             smoothBasePosition = -1;
             smoothBaseRealtime = 0;
         }
@@ -428,7 +405,7 @@ public class KaraokeStatusView extends LinearLayout {
             long now = SystemClock.elapsedRealtime();
             long position = snapshot.getPositionMs();
             long current = drawPosition(now);
-            if (smoothBasePosition < 0 || Math.abs(position - current) > 1500 || position + 200 < smoothBasePosition) {
+            if (smoothBasePosition < 0 || Math.abs(position - current) > 1500) {
                 smoothBasePosition = position;
             } else {
                 smoothBasePosition = Math.max(position, current);
@@ -443,7 +420,7 @@ public class KaraokeStatusView extends LinearLayout {
         private long drawPosition(long now) {
             if (snapshot == null) return 0;
             if (smoothBasePosition < 0) return snapshot.getPositionMs();
-            long elapsed = Math.max(0, Math.min(1200, now - smoothBaseRealtime));
+            long elapsed = Math.max(0, Math.min(260, now - smoothBaseRealtime));
             return smoothBasePosition + elapsed;
         }
 
@@ -452,10 +429,12 @@ public class KaraokeStatusView extends LinearLayout {
             return left + (right - left) * Math.max(0, Math.min(1, value));
         }
 
-        private float yOf(float pitch, int centerPitch, float top, float bottom) {
-            float diff = Math.max(-PITCH_RANGE, Math.min(PITCH_RANGE, pitch - centerPitch));
-            float center = (top + bottom) / 2f;
-            return center - diff * (bottom - top - dp(6)) / (PITCH_RANGE * 2f);
+        private float yOf(float pitch, float top, float bottom) {
+            float innerTop = top + dp(5);
+            float innerBottom = bottom - dp(5);
+            float value = (pitch - pitchScale.min) / Math.max(1f, pitchScale.max - pitchScale.min);
+            value = Math.max(0f, Math.min(1f, value));
+            return innerBottom - value * Math.max(1f, innerBottom - innerTop);
         }
 
         private int noteColor(KaraokeNote note, boolean current, long position) {
@@ -467,6 +446,46 @@ public class KaraokeStatusView extends LinearLayout {
             if (!note.isPitchRequired()) return 0x9938BDF8;
             if (note.getType().getScoreWeight() > 1.0) return 0xCCFBBF24;
             return 0xCCFFFFFF;
+        }
+
+        private PitchScale defaultPitchScale() {
+            return new PitchScale(60f - MIN_PITCH_SPAN / 2f, 60f + MIN_PITCH_SPAN / 2f);
+        }
+
+        private PitchScale pitchScaleFrom(KaraokeTrack track) {
+            if (track == null || !track.hasPitchRequiredNotes()) return defaultPitchScale();
+            int min = Integer.MAX_VALUE;
+            int max = Integer.MIN_VALUE;
+            for (KaraokeNote note : track.getNotes()) {
+                if (!note.isScored() || !note.isPitchRequired()) continue;
+                min = Math.min(min, note.getPitch());
+                max = Math.max(max, note.getPitch());
+            }
+            if (min == Integer.MAX_VALUE || max == Integer.MIN_VALUE) return defaultPitchScale();
+            float low = min - PITCH_PADDING;
+            float high = max + PITCH_PADDING;
+            float span = high - low;
+            if (span < MIN_PITCH_SPAN) {
+                float center = (low + high) / 2f;
+                low = center - MIN_PITCH_SPAN / 2f;
+                high = center + MIN_PITCH_SPAN / 2f;
+            }
+            return new PitchScale(low, high);
+        }
+
+        private class PitchScale {
+
+            private final float min;
+            private final float max;
+
+            private PitchScale(float min, float max) {
+                this.min = min;
+                this.max = Math.max(min + 1f, max);
+            }
+
+            private float center() {
+                return (min + max) / 2f;
+            }
         }
     }
 
