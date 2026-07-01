@@ -30,8 +30,11 @@ public class KaraokePitchTrackGenerator {
     private static final long DEFAULT_LAST_LINE_MS = 3000;
     private static final long LINE_UNIT_MS = 520;
     private static final int MAX_LINE_UNITS = 10;
+    private static final long WORD_COMPACT_MS = 280;
     private static final int FRAME_SIZE = 2048;
     private static final int HOP_SIZE = 1024;
+    private static final double ANALYSIS_HIGH_PASS_HZ = 80.0;
+    private static final double ANALYSIS_LOW_PASS_HZ = 3500.0;
     private static final double MIN_FREQUENCY_HZ = 80.0;
     private static final double MAX_FREQUENCY_HZ = 800.0;
     private static final double MIN_VOLUME = 0.006;
@@ -50,6 +53,9 @@ public class KaraokePitchTrackGenerator {
     private static final long MERGE_GAP_MS = 140;
     private static final long MERGE_MAX_MS = 2600;
     private static final double KEY_CORRECTION_MAX_QUALITY = 0.68;
+    private static final int MAX_PATH_CANDIDATES = 4;
+    private static final double PATH_MISSING_PENALTY = 0.22;
+    private static final double PATH_LINE_BREAK_RELAX = 0.56;
     private static final double[][] KEY_TABLE = {
             {0.19, 0.00, 0.21, 0.00, 0.21, 0.08, 0.00, 0.13, 0.00, 0.11, 0.00, 0.07},
             {0.09, 0.21, 0.00, 0.17, 0.00, 0.18, 0.08, 0.00, 0.13, 0.00, 0.14, 0.00},
@@ -138,12 +144,99 @@ public class KaraokePitchTrackGenerator {
     }
 
     private static List<Note> notes(List<Segment> segments, List<PitchFrame> frames) {
+        List<List<PitchCandidate>> candidates = new ArrayList<>();
+        for (Segment segment : segments) candidates.add(PitchWindow.from(frames, segment.startMs, segment.endMs).candidates());
+        List<PitchCandidate> path = smoothCandidatePath(segments, candidates);
         List<Note> notes = new ArrayList<>();
-        for (Segment segment : segments) {
-            PitchCandidate candidate = PitchWindow.from(frames, segment.startMs, segment.endMs).candidate();
-            notes.add(new Note(segment, candidate));
-        }
+        for (int i = 0; i < segments.size(); i++) notes.add(new Note(segments.get(i), path.get(i)));
         return notes;
+    }
+
+    private static List<PitchCandidate> smoothCandidatePath(List<Segment> segments, List<List<PitchCandidate>> candidates) {
+        if (segments.isEmpty()) return Collections.emptyList();
+        int count = segments.size();
+        double[][] scores = new double[count][];
+        int[][] previous = new int[count][];
+        for (int i = 0; i < count; i++) {
+            List<PitchCandidate> row = safeCandidates(candidates.get(i));
+            scores[i] = new double[row.size()];
+            previous[i] = new int[row.size()];
+            for (int j = 0; j < row.size(); j++) {
+                PitchCandidate candidate = row.get(j);
+                double emission = emissionScore(candidate);
+                if (i == 0) {
+                    scores[i][j] = emission;
+                    previous[i][j] = -1;
+                    continue;
+                }
+                List<PitchCandidate> prevRow = safeCandidates(candidates.get(i - 1));
+                double best = -Double.MAX_VALUE;
+                int bestIndex = 0;
+                for (int k = 0; k < prevRow.size(); k++) {
+                    double score = scores[i - 1][k] + emission - transitionPenalty(prevRow.get(k), candidate, segments.get(i - 1).lineEnd);
+                    if (score > best) {
+                        best = score;
+                        bestIndex = k;
+                    }
+                }
+                scores[i][j] = best;
+                previous[i][j] = bestIndex;
+            }
+        }
+        int bestIndex = 0;
+        double bestScore = -Double.MAX_VALUE;
+        for (int i = 0; i < scores[count - 1].length; i++) {
+            if (scores[count - 1][i] > bestScore) {
+                bestScore = scores[count - 1][i];
+                bestIndex = i;
+            }
+        }
+        PitchCandidate[] path = new PitchCandidate[count];
+        for (int i = count - 1; i >= 0; i--) {
+            List<PitchCandidate> row = safeCandidates(candidates.get(i));
+            PitchCandidate chosen = row.get(bestIndex);
+            path[i] = chosen;
+            bestIndex = previous[i][bestIndex];
+            if (bestIndex < 0) break;
+        }
+        for (int i = 0; i < path.length; i++) if (path[i] == null) path[i] = PitchCandidate.EMPTY;
+        normalizePathOctaves(path);
+        List<PitchCandidate> result = new ArrayList<>();
+        Collections.addAll(result, path);
+        return result;
+    }
+
+    private static List<PitchCandidate> safeCandidates(List<PitchCandidate> candidates) {
+        return candidates == null || candidates.isEmpty() ? Collections.singletonList(PitchCandidate.EMPTY) : candidates;
+    }
+
+    private static double emissionScore(PitchCandidate candidate) {
+        if (candidate == null || candidate.pitch < 0) return -PATH_MISSING_PENALTY;
+        return candidate.quality * 1.85;
+    }
+
+    private static double transitionPenalty(PitchCandidate previous, PitchCandidate current, boolean lineBreak) {
+        if (previous == null || current == null || previous.pitch < 0 || current.pitch < 0) return PATH_MISSING_PENALTY;
+        int pitch = normalizeOctave(current.pitch, previous.pitch);
+        int jump = Math.abs(pitch - previous.pitch);
+        double penalty;
+        if (jump <= 1) penalty = 0.015 * jump;
+        else if (jump <= 3) penalty = 0.04 + (jump - 1) * 0.045;
+        else if (jump <= 7) penalty = 0.18 + (jump - 3) * 0.075;
+        else penalty = 0.50 + (jump - 7) * 0.16;
+        if (jump >= 11) penalty += 0.24;
+        return lineBreak ? penalty * PATH_LINE_BREAK_RELAX : penalty;
+    }
+
+    private static void normalizePathOctaves(PitchCandidate[] path) {
+        Integer anchor = null;
+        for (int i = 0; i < path.length; i++) {
+            PitchCandidate candidate = path[i];
+            if (candidate == null || candidate.pitch < 0) continue;
+            int pitch = anchor == null ? candidate.pitch : normalizeOctave(candidate.pitch, anchor);
+            path[i] = new PitchCandidate(pitch, candidate.quality);
+            anchor = pitch;
+        }
     }
 
     private static void stabilize(List<Note> notes) {
@@ -532,13 +625,45 @@ public class KaraokePitchTrackGenerator {
 
     private static void appendWordSegments(List<Segment> segments, LyricsLine line, long lineStartMs, long lineEndMs) {
         List<LyricsWord> words = line.getWords();
+        List<Segment> raw = new ArrayList<>();
         for (int i = 0; i < words.size() && segments.size() < MAX_NOTES; i++) {
             LyricsWord word = words.get(i);
             if (word == null || TextUtils.isEmpty(word.getText())) continue;
             long startMs = lineStartMs + word.getStartOffsetMs();
             long endMs = word.getDurationMs() > 0 ? startMs + word.getDurationMs() : nextWordStart(lineStartMs, lineEndMs, words, i);
-            segments.add(new Segment(startMs, endMs, word.getText()));
+            raw.add(new Segment(startMs, endMs, word.getText()));
         }
+        if (raw.isEmpty()) return;
+        if (shouldCompactWords(raw, lineEndMs - lineStartMs)) appendCompactedSegments(segments, raw, lineEndMs - lineStartMs);
+        else for (Segment segment : raw) if (segments.size() < MAX_NOTES) segments.add(segment);
+    }
+
+    private static boolean shouldCompactWords(List<Segment> raw, long durationMs) {
+        if (raw.size() <= 4) return false;
+        int target = targetUnitCount(raw.size(), durationMs);
+        if (raw.size() <= target) return false;
+        int shortText = 0;
+        int shortDuration = 0;
+        for (Segment segment : raw) {
+            if (codePointCount(segment.text) <= 1) shortText++;
+            if (segment.endMs - segment.startMs <= WORD_COMPACT_MS) shortDuration++;
+        }
+        return shortText >= Math.round(raw.size() * 0.7f) || shortDuration >= Math.round(raw.size() * 0.65f);
+    }
+
+    private static void appendCompactedSegments(List<Segment> output, List<Segment> raw, long durationMs) {
+        int target = Math.max(1, Math.min(raw.size(), targetUnitCount(raw.size(), durationMs)));
+        int groupSize = (int) Math.ceil(raw.size() / (double) target);
+        for (int i = 0; i < raw.size() && output.size() < MAX_NOTES; i += groupSize) {
+            int end = Math.min(raw.size(), i + groupSize);
+            StringBuilder text = new StringBuilder();
+            for (int j = i; j < end; j++) text.append(raw.get(j).text);
+            output.add(new Segment(raw.get(i).startMs, raw.get(end - 1).endMs, text.toString()));
+        }
+    }
+
+    private static int codePointCount(String text) {
+        return TextUtils.isEmpty(text) ? 0 : text.codePointCount(0, text.length());
     }
 
     private static void appendLineSegments(List<Segment> segments, String text, long startMs, long endMs) {
@@ -710,6 +835,7 @@ public class KaraokePitchTrackGenerator {
         private final float[] frame = new float[FRAME_SIZE];
         private final List<PitchFrame> frames = new ArrayList<>();
         private YinPitchDetector detector;
+        private VoiceBandpassFilter filter;
         private long sampleCount;
         private int sampleRate;
 
@@ -722,9 +848,11 @@ public class KaraokePitchTrackGenerator {
             if (this.sampleRate == safe && detector != null) return;
             this.sampleRate = safe;
             this.detector = new YinPitchDetector(safe, 0.12, 0.08, FRAME_SIZE);
+            this.filter = new VoiceBandpassFilter(safe);
         }
 
         private void add(float value) {
+            if (filter != null) value = filter.process(value);
             ring[(int) (sampleCount % FRAME_SIZE)] = value;
             sampleCount++;
             if (sampleCount < FRAME_SIZE) return;
@@ -742,6 +870,69 @@ public class KaraokePitchTrackGenerator {
 
         private List<PitchFrame> frames() {
             return frames;
+        }
+    }
+
+    private static class VoiceBandpassFilter {
+
+        private final Biquad highPass;
+        private final Biquad lowPass;
+
+        private VoiceBandpassFilter(double sampleRate) {
+            highPass = Biquad.highPass(ANALYSIS_HIGH_PASS_HZ, sampleRate);
+            lowPass = Biquad.lowPass(ANALYSIS_LOW_PASS_HZ, sampleRate);
+        }
+
+        private float process(float sample) {
+            double value = highPass.process(sample);
+            value = lowPass.process(value);
+            return (float) Math.max(-1, Math.min(1, value));
+        }
+    }
+
+    private static class Biquad {
+
+        private final double b0;
+        private final double b1;
+        private final double b2;
+        private final double a1;
+        private final double a2;
+        private double x1;
+        private double x2;
+        private double y1;
+        private double y2;
+
+        private Biquad(double b0, double b1, double b2, double a1, double a2) {
+            this.b0 = b0;
+            this.b1 = b1;
+            this.b2 = b2;
+            this.a1 = a1;
+            this.a2 = a2;
+        }
+
+        private static Biquad highPass(double cutoff, double sampleRate) {
+            double w0 = 2 * Math.PI * cutoff / sampleRate;
+            double cos = Math.cos(w0);
+            double alpha = Math.sin(w0) / (2 * 0.707);
+            double a0 = 1 + alpha;
+            return new Biquad((1 + cos) / 2 / a0, -(1 + cos) / a0, (1 + cos) / 2 / a0, -2 * cos / a0, (1 - alpha) / a0);
+        }
+
+        private static Biquad lowPass(double cutoff, double sampleRate) {
+            double w0 = 2 * Math.PI * cutoff / sampleRate;
+            double cos = Math.cos(w0);
+            double alpha = Math.sin(w0) / (2 * 0.707);
+            double a0 = 1 + alpha;
+            return new Biquad((1 - cos) / 2 / a0, (1 - cos) / a0, (1 - cos) / 2 / a0, -2 * cos / a0, (1 - alpha) / a0);
+        }
+
+        private double process(double x) {
+            double y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+            x2 = x1;
+            x1 = x;
+            y2 = y1;
+            y1 = y;
+            return y;
         }
     }
 
@@ -808,19 +999,49 @@ public class KaraokePitchTrackGenerator {
         }
 
         private PitchCandidate candidate() {
-            if (values.size() < 2 || total <= 0) return PitchCandidate.EMPTY;
+            List<PitchCandidate> candidates = candidates();
+            return candidates.isEmpty() ? PitchCandidate.EMPTY : candidates.get(0);
+        }
+
+        private List<PitchCandidate> candidates() {
+            if (values.size() < 2 || total <= 0) return Collections.emptyList();
             double ratio = values.size() / (double) total;
-            if (ratio < MIN_WINDOW_VALID_RATIO) return PitchCandidate.EMPTY;
+            if (ratio < MIN_WINDOW_VALID_RATIO) return Collections.emptyList();
             Collections.sort(values, (a, b) -> Double.compare(a.midi, b.midi));
             double median = values.get(values.size() / 2).midi;
             double spread = percentile(0.80) - percentile(0.20);
-            if (spread > MAX_WINDOW_SPREAD) return PitchCandidate.EMPTY;
-            int pitch = likelyPitch((int) Math.round(median));
-            double modeQuality = modeQuality(pitch);
-            double quality = ratio
-                    * Math.max(0.15, 1.0 - spread / Math.max(1.0, MAX_WINDOW_SPREAD))
-                    * Math.max(0.35, modeQuality);
-            return new PitchCandidate(pitch, quality);
+            if (spread > MAX_WINDOW_SPREAD) return Collections.emptyList();
+            int medianPitch = clampMidi((int) Math.round(median));
+            double[] scores = weightedScores();
+            double totalWeight = totalWeight();
+            if (totalWeight <= 0) return Collections.singletonList(new PitchCandidate(medianPitch, ratio * 0.35));
+            double bestScore = 0;
+            for (int pitch = MIN_MIDI; pitch <= MAX_MIDI; pitch++) bestScore = Math.max(bestScore, scores[pitch]);
+            if (bestScore <= 0) return Collections.singletonList(new PitchCandidate(medianPitch, ratio * 0.35));
+            double spreadFactor = Math.max(0.15, 1.0 - spread / Math.max(1.0, MAX_WINDOW_SPREAD));
+            List<PitchCandidate> result = new ArrayList<>();
+            boolean[] used = new boolean[MAX_MIDI + 1];
+            for (int count = 0; count < MAX_PATH_CANDIDATES; count++) {
+                int bestPitch = -1;
+                double best = 0;
+                for (int pitch = MIN_MIDI; pitch <= MAX_MIDI; pitch++) {
+                    int normalized = normalizeOctave(pitch, medianPitch);
+                    if (used[normalized]) continue;
+                    if (scores[pitch] <= bestScore * 0.16 && count > 0) continue;
+                    if (scores[pitch] > best) {
+                        best = scores[pitch];
+                        bestPitch = normalized;
+                    }
+                }
+                if (bestPitch < 0) break;
+                double modeQuality = Math.max(0, Math.min(1, best / totalWeight));
+                double quality = ratio * spreadFactor * Math.max(0.35, modeQuality);
+                result.add(new PitchCandidate(bestPitch, quality));
+                markUsed(used, bestPitch);
+            }
+            if (result.isEmpty()) result.add(new PitchCandidate(likelyPitch(medianPitch), ratio * spreadFactor));
+            Collections.sort(result, (a, b) -> Double.compare(b.quality, a.quality));
+            return result;
         }
 
         private double percentile(double p) {
@@ -853,6 +1074,21 @@ public class KaraokePitchTrackGenerator {
                 if (candidate >= 0 && candidate < scores.length) score = Math.max(score, scores[candidate]);
             }
             return Math.max(0, Math.min(1, score / total));
+        }
+
+        private double totalWeight() {
+            double total = 0;
+            for (FrameValue value : values) total += value.weight;
+            return total;
+        }
+
+        private void markUsed(boolean[] used, int pitch) {
+            for (int candidate = pitch - 1; candidate <= pitch + 1; candidate++) {
+                if (candidate >= 0 && candidate < used.length) used[candidate] = true;
+            }
+            for (int candidate = pitch - 24; candidate <= pitch + 24; candidate += 12) {
+                if (candidate >= 0 && candidate < used.length) used[candidate] = true;
+            }
         }
 
         private double[] weightedScores() {
